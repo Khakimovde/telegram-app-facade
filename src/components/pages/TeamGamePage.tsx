@@ -61,13 +61,29 @@ const TeamGamePage = () => {
     if (!user) return;
     try {
       const data = await teamGameStatus(user.id);
-      if (data.round) {
+      
+      // Check if server auto-resolved a round
+      if (data.resolved && myPlayer) {
+        const histData = await teamGameHistory(user.id);
+        setHistory(histData);
+        const lastGame = histData.find((h: HistoryItem) => h.team_game_rounds?.winning_team);
+        if (lastGame && lastGame.team_game_rounds?.winning_team) {
+          const won = lastGame.team === lastGame.team_game_rounds.winning_team;
+          setResultModal({
+            won,
+            team: lastGame.team,
+            prize: lastGame.prize,
+            winningTeam: lastGame.team_game_rounds.winning_team,
+          });
+        }
+        setMyPlayer(null);
+        await refreshUser();
+      } else if (data.round) {
         // Check if round changed (new round started = old one resolved)
         if (lastRoundId && data.round.id !== lastRoundId && myPlayer) {
-          // Load history to find the result
           const histData = await teamGameHistory(user.id);
           setHistory(histData);
-          const lastGame = histData.find((h: HistoryItem) => h.team_game_rounds);
+          const lastGame = histData.find((h: HistoryItem) => h.team_game_rounds?.winning_team);
           if (lastGame && lastGame.team_game_rounds?.winning_team) {
             const won = lastGame.team === lastGame.team_game_rounds.winning_team;
             setResultModal({
@@ -77,8 +93,12 @@ const TeamGamePage = () => {
               winningTeam: lastGame.team_game_rounds.winning_team,
             });
           }
-          setMyPlayer(null); // Reset for new round
+          setMyPlayer(null);
+          await refreshUser();
         }
+      }
+
+      if (data.round) {
         setRound(data.round);
         setLastRoundId(data.round.id);
         setRedPlayers(data.redPlayers || 0);
@@ -88,7 +108,7 @@ const TeamGamePage = () => {
     } catch {
       // silent
     }
-  }, [user, lastRoundId, myPlayer]);
+  }, [user, lastRoundId, myPlayer, refreshUser]);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -309,7 +329,7 @@ const TeamGamePage = () => {
         <Trophy size={14} className="text-accent" />
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground">G'olib:</span>
-          <span className="font-bold text-accent">40 🪙</span>
+          <span className="font-bold text-accent">30 🪙</span>
           <span className="text-muted-foreground mx-1">|</span>
           <span className="text-muted-foreground">Yutqazganlar:</span>
           <span className="font-bold text-muted-foreground">10 🪙</span>

@@ -5,18 +5,58 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function getCurrentRoundKey(): string {
+function shouldResolveRound(startedAt: string): boolean {
   const now = new Date();
-  const slot = Math.floor(now.getUTCMinutes() / 20) * 20;
-  return `${now.toISOString().split("T")[0]}-${now.getUTCHours()}-${slot}`;
+  const currentSlotMin = Math.floor(now.getUTCMinutes() / 20) * 20;
+  const slotStart = new Date(now);
+  slotStart.setUTCMinutes(currentSlotMin, 0, 0);
+  return new Date(startedAt).getTime() < slotStart.getTime();
 }
 
-function getSecondsUntilNextRound(): number {
-  const now = new Date();
-  const min = now.getUTCMinutes();
-  const sec = now.getUTCSeconds();
-  const nextSlot = Math.ceil((min + 1) / 20) * 20;
-  return (nextSlot - min) * 60 - sec;
+async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: string }> {
+  const totalAds = round.red_ads + round.blue_ads;
+  let winningTeam: string;
+
+  if (totalAds === 0) {
+    winningTeam = Math.random() < 0.5 ? "red" : "blue";
+  } else {
+    const redChance = round.red_ads / totalAds;
+    winningTeam = Math.random() < redChance ? "red" : "blue";
+  }
+
+  const winPrize = 30;
+  const losePrize = 10;
+
+  // Update round
+  await supabase
+    .from("team_game_rounds")
+    .update({
+      status: "completed",
+      ended_at: new Date().toISOString(),
+      winning_team: winningTeam,
+      red_prize: winningTeam === "red" ? winPrize : losePrize,
+      blue_prize: winningTeam === "blue" ? winPrize : losePrize,
+    })
+    .eq("id", round.id);
+
+  // Get all players
+  const { data: players } = await supabase
+    .from("team_game_players")
+    .select("*")
+    .eq("round_id", round.id);
+
+  // Award prizes
+  for (const p of (players || [])) {
+    if (p.ads_watched === 0) continue;
+    const prize = p.team === winningTeam ? winPrize : losePrize;
+    await supabase.from("team_game_players").update({ prize }).eq("id", p.id);
+    await supabase.rpc("add_balance", { p_user_id: p.user_id, p_amount: prize });
+  }
+
+  // Create new round
+  await supabase.from("team_game_rounds").insert({ status: "active" });
+
+  return { winningTeam };
 }
 
 Deno.serve(async (req) => {
@@ -33,18 +73,17 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ACTION: join - Join or get current round
+    // ACTION: join
     if (action === "join") {
       if (!userId) throw new Error("userId required");
 
-      // Find or create active round
       let { data: round } = await supabase
         .from("team_game_rounds")
         .select("*")
         .eq("status", "active")
         .order("started_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (!round) {
         const { data: newRound, error: createErr } = await supabase
@@ -56,44 +95,41 @@ Deno.serve(async (req) => {
         round = newRound;
       }
 
-      // Check if user already in this round
+      // Auto-resolve if expired
+      if (shouldResolveRound(round.started_at)) {
+        await resolveRound(supabase, round);
+        const { data: newRound } = await supabase
+          .from("team_game_rounds")
+          .select("*")
+          .eq("status", "active")
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        round = newRound;
+        if (!round) {
+          const { data: cr } = await supabase.from("team_game_rounds").insert({ status: "active" }).select().single();
+          round = cr;
+        }
+      }
+
       const { data: existing } = await supabase
         .from("team_game_players")
         .select("*")
         .eq("round_id", round.id)
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
       if (existing) {
-        return new Response(JSON.stringify({
-          round,
-          player: existing,
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ round, player: existing }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      // Count current teams to balance
-      const { count: redCount } = await supabase
-        .from("team_game_players")
-        .select("*", { count: "exact", head: true })
-        .eq("round_id", round.id)
-        .eq("team", "red");
-
-      const { count: blueCount } = await supabase
-        .from("team_game_players")
-        .select("*", { count: "exact", head: true })
-        .eq("round_id", round.id)
-        .eq("team", "blue");
-
-      // Truly random team assignment
       const team = Math.random() < 0.5 ? "red" : "blue";
 
       const { data: player, error: insertErr } = await supabase
         .from("team_game_players")
-        .insert({
-          round_id: round.id,
-          user_id: userId,
-          team,
-        })
+        .insert({ round_id: round.id, user_id: userId, team })
         .select()
         .single();
 
@@ -104,18 +140,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: watch-ad - Record an ad watch for the team
+    // ACTION: watch-ad
     if (action === "watch-ad") {
       if (!userId) throw new Error("userId required");
 
-      // Get active round and player
       const { data: round } = await supabase
         .from("team_game_rounds")
         .select("*")
         .eq("status", "active")
         .order("started_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (!round) throw new Error("No active round");
 
@@ -124,32 +159,28 @@ Deno.serve(async (req) => {
         .select("*")
         .eq("round_id", round.id)
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
       if (!player) throw new Error("Not in this round");
 
-      // Increment player's ads_watched
       await supabase
         .from("team_game_players")
         .update({ ads_watched: player.ads_watched + 1 })
         .eq("id", player.id);
 
-      // Increment team's total in round
       const field = player.team === "red" ? "red_ads" : "blue_ads";
       await supabase
         .from("team_game_rounds")
         .update({ [field]: round[field] + 1 })
         .eq("id", round.id);
 
-      // Log the ad watch
       await supabase.from("ad_watch_log").insert({
         user_id: userId,
         type: "team_game",
         slot_key: `team-${round.id}`,
       });
 
-      // Update ads_watched_total on user
-      const { data: usr } = await supabase.from("users").select("ads_watched_total").eq("id", userId).single();
+      const { data: usr } = await supabase.from("users").select("ads_watched_total").eq("id", userId).maybeSingle();
       if (usr) {
         await supabase.from("users").update({ ads_watched_total: usr.ads_watched_total + 1 }).eq("id", userId);
       }
@@ -162,7 +193,7 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ACTION: status - Get current round status
+    // ACTION: status - Get current round status, auto-resolve if expired
     if (action === "status") {
       const { data: round } = await supabase
         .from("team_game_rounds")
@@ -170,15 +201,62 @@ Deno.serve(async (req) => {
         .eq("status", "active")
         .order("started_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (!round) {
-        return new Response(JSON.stringify({ round: null }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // No active round, create one
+        const { data: newRound } = await supabase
+          .from("team_game_rounds")
+          .insert({ status: "active" })
+          .select()
+          .single();
+
+        return new Response(JSON.stringify({
+          round: newRound,
+          redPlayers: 0,
+          bluePlayers: 0,
+          myPlayer: null,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // Get player counts
+      // Auto-resolve expired round
+      if (shouldResolveRound(round.started_at)) {
+        const result = await resolveRound(supabase, round);
+        console.log("Auto-resolved round", round.id, "winner:", result.winningTeam);
+
+        // Get new active round
+        const { data: newRound } = await supabase
+          .from("team_game_rounds")
+          .select("*")
+          .eq("status", "active")
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let myPlayer = null;
+        if (userId && newRound) {
+          const { data: p } = await supabase
+            .from("team_game_players")
+            .select("*")
+            .eq("round_id", newRound.id)
+            .eq("user_id", userId)
+            .maybeSingle();
+          myPlayer = p;
+        }
+
+        return new Response(JSON.stringify({
+          round: newRound,
+          redPlayers: 0,
+          bluePlayers: 0,
+          myPlayer,
+          resolved: {
+            winningTeam: result.winningTeam,
+            roundId: round.id,
+          },
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Round still active
       const { count: redPlayers } = await supabase
         .from("team_game_players")
         .select("*", { count: "exact", head: true })
@@ -198,7 +276,7 @@ Deno.serve(async (req) => {
           .select("*")
           .eq("round_id", round.id)
           .eq("user_id", userId)
-          .single();
+          .maybeSingle();
         myPlayer = p;
       }
 
@@ -210,78 +288,7 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ACTION: resolve - End current round and pick winner
-    if (action === "resolve") {
-      const { data: round } = await supabase
-        .from("team_game_rounds")
-        .select("*")
-        .eq("status", "active")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (!round) {
-        return new Response(JSON.stringify({ message: "No active round" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const totalAds = round.red_ads + round.blue_ads;
-      let winningTeam: string;
-
-      if (totalAds === 0) {
-        // Random if no ads
-        winningTeam = Math.random() < 0.5 ? "red" : "blue";
-      } else {
-        // Weighted random based on ad count
-        const redChance = round.red_ads / totalAds;
-        winningTeam = Math.random() < redChance ? "red" : "blue";
-      }
-
-      const winPrize = 40;
-      const losePrize = 10;
-
-      // Update round
-      await supabase
-        .from("team_game_rounds")
-        .update({
-          status: "completed",
-          ended_at: new Date().toISOString(),
-          winning_team: winningTeam,
-          red_prize: winningTeam === "red" ? winPrize : losePrize,
-          blue_prize: winningTeam === "blue" ? winPrize : losePrize,
-        })
-        .eq("id", round.id);
-
-      // Get all players
-      const { data: players } = await supabase
-        .from("team_game_players")
-        .select("*")
-        .eq("round_id", round.id);
-
-      // Award prizes
-      for (const p of (players || [])) {
-        if (p.ads_watched === 0) continue; // Must have watched at least 1 ad
-        const prize = p.team === winningTeam ? winPrize : losePrize;
-        await supabase
-          .from("team_game_players")
-          .update({ prize })
-          .eq("id", p.id);
-        await supabase.rpc("add_balance", { p_user_id: p.user_id, p_amount: prize });
-      }
-
-      // Create new round
-      await supabase.from("team_game_rounds").insert({ status: "active" });
-
-      return new Response(JSON.stringify({
-        success: true,
-        winningTeam,
-        red_ads: round.red_ads,
-        blue_ads: round.blue_ads,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ACTION: history - Get user's game history
+    // ACTION: history
     if (action === "history") {
       if (!userId) throw new Error("userId required");
 
