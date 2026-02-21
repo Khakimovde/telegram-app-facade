@@ -31,7 +31,14 @@ const Index = () => {
           <p className="text-2xl mb-2">⚠️</p>
           <p className="text-sm text-destructive font-medium mb-1">Xatolik</p>
           <p className="text-xs text-muted-foreground">{error || "Foydalanuvchi topilmadi"}</p>
-          <p className="text-xs text-muted-foreground mt-2">Iltimos, Telegram orqali oching</p>
+          <a
+            href="https://t.me/LunaraPay_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-3 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
+          >
+            🚀 Telegram orqali ochish
+          </a>
         </div>
       </div>
     );
