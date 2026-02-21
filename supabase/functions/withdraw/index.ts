@@ -1,0 +1,71 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { userId, tanga, card } = await req.json();
+    if (!userId || !tanga || !card) throw new Error("userId, tanga, and card required");
+    if (tanga < 10000) throw new Error("Minimal 10000 tanga");
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Check balance
+    const { data: user } = await supabase
+      .from("users")
+      .select("balance")
+      .eq("id", userId)
+      .single();
+
+    if (!user || user.balance < tanga) {
+      return new Response(
+        JSON.stringify({ error: "Balans yetarli emas" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Deduct balance
+    await supabase
+      .from("users")
+      .update({ balance: user.balance - tanga })
+      .eq("id", userId);
+
+    // Calculate som (1 tanga = 1.1764 so'm)
+    const som = Math.round(tanga * 1.1764);
+
+    // Create withdraw request
+    const { data: request, error } = await supabase
+      .from("withdraw_requests")
+      .insert({
+        user_id: userId,
+        tanga,
+        som,
+        card,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return new Response(
+      JSON.stringify({ success: true, request }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
