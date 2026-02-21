@@ -375,7 +375,7 @@ const TeamGamePage = () => {
           <li>• Jamoangiz uchun reklama ko'ring — har biri +1</li>
           <li>• Ko'p reklama = yuqori yutish ehtimoli</li>
           <li>• Raund har 20 daqiqada o'tkaziladi</li>
-          <li>• G'olib jamoa: 40 tanga | Yutqazganlar: 10 tanga</li>
+          <li>• G'olib jamoa: 30 tanga | Yutqazganlar: 10 tanga</li>
           <li>• Kamida 1 ta reklama ko'rgan o'yinchilar mukofot oladi</li>
         </ul>
       </div>
