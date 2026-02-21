@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       winningTeam = Math.random() < redChance ? "red" : "blue";
     }
 
-    const winPrize = 40;
+    const winPrize = 30;
     const losePrize = 10;
 
     await supabase
