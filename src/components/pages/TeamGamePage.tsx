@@ -47,7 +47,7 @@ const TeamGamePage = () => {
     const now = new Date();
     const min = now.getMinutes();
     const sec = now.getSeconds();
-    const nextSlot = (Math.floor(min / 20) + 1) * 20;
+    const nextSlot = min < 30 ? 30 : 60;
     const remaining = (nextSlot - min - 1) * 60 + (59 - sec);
     return { minutes: Math.floor(remaining / 60), seconds: remaining % 60 };
   });
@@ -118,7 +118,7 @@ const TeamGamePage = () => {
       const now = new Date();
       const min = now.getMinutes();
       const sec = now.getSeconds();
-      const nextSlot = (Math.floor(min / 20) + 1) * 20;
+      const nextSlot = min < 30 ? 30 : 60;
       const totalRemaining = (nextSlot - min - 1) * 60 + (59 - sec);
       setTimeLeft({
         minutes: Math.floor(totalRemaining / 60),
@@ -394,7 +394,7 @@ const TeamGamePage = () => {
           <li>• O'yinga kirganingizda tasodifiy jamoa beriladi (🔴 yoki 🔵)</li>
           <li>• Jamoangiz uchun reklama ko'ring — har biri +1</li>
           <li>• Ko'p reklama = yuqori yutish ehtimoli</li>
-          <li>• Raund har 20 daqiqada o'tkaziladi</li>
+          <li>• Raund har 30 daqiqada o'tkaziladi (00 va 30 daqiqalarda)</li>
           <li>• G'olib jamoa: 30 tanga | Yutqazganlar: 10 tanga</li>
           <li>• Kamida 1 ta reklama ko'rgan o'yinchilar mukofot oladi</li>
         </ul>

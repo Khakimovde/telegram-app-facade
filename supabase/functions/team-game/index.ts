@@ -5,15 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// 30-minute slots: rounds end at :00 and :30
 function shouldResolveRound(startedAt: string): boolean {
   const now = new Date();
-  const currentSlotMin = Math.floor(now.getUTCMinutes() / 20) * 20;
+  const currentSlotMin = now.getUTCMinutes() < 30 ? 0 : 30;
   const slotStart = new Date(now);
   slotStart.setUTCMinutes(currentSlotMin, 0, 0);
   return new Date(startedAt).getTime() < slotStart.getTime();
 }
 
-async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: string }> {
+async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: string } | null> {
+  // Re-check round status to prevent race condition (double resolve)
+  const { data: freshRound } = await supabase
+    .from("team_game_rounds")
+    .select("status")
+    .eq("id", round.id)
+    .single();
+
+  if (!freshRound || freshRound.status !== "active") {
+    console.log("Round already resolved, skipping:", round.id);
+    return null;
+  }
+
   const totalAds = round.red_ads + round.blue_ads;
   let winningTeam: string;
 
@@ -27,8 +40,8 @@ async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: s
   const winPrize = 30;
   const losePrize = 10;
 
-  // Update round
-  await supabase
+  // Update round status first (acts as a lock)
+  const { error: updateErr } = await supabase
     .from("team_game_rounds")
     .update({
       status: "completed",
@@ -37,15 +50,20 @@ async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: s
       red_prize: winningTeam === "red" ? winPrize : losePrize,
       blue_prize: winningTeam === "blue" ? winPrize : losePrize,
     })
-    .eq("id", round.id);
+    .eq("id", round.id)
+    .eq("status", "active"); // Only update if still active
 
-  // Get all players
+  if (updateErr) {
+    console.log("Failed to update round (likely already resolved):", updateErr.message);
+    return null;
+  }
+
+  // Get all players and award prizes
   const { data: players } = await supabase
     .from("team_game_players")
     .select("*")
     .eq("round_id", round.id);
 
-  // Award prizes
   for (const p of (players || [])) {
     if (p.ads_watched === 0) continue;
     const prize = p.team === winningTeam ? winPrize : losePrize;
@@ -53,10 +71,59 @@ async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: s
     await supabase.rpc("add_balance", { p_user_id: p.user_id, p_amount: prize });
   }
 
+  console.log(`Round ${round.id} resolved: ${winningTeam} won, ${(players || []).filter((p: any) => p.ads_watched > 0).length} players rewarded`);
+
   // Create new round
   await supabase.from("team_game_rounds").insert({ status: "active" });
 
   return { winningTeam };
+}
+
+async function getOrCreateActiveRound(supabase: any) {
+  let { data: round } = await supabase
+    .from("team_game_rounds")
+    .select("*")
+    .eq("status", "active")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!round) {
+    const { data: newRound } = await supabase
+      .from("team_game_rounds")
+      .insert({ status: "active" })
+      .select()
+      .single();
+    round = newRound;
+  }
+
+  // Auto-resolve if expired
+  if (round && shouldResolveRound(round.started_at)) {
+    const result = await resolveRound(supabase, round);
+    if (result) {
+      // Get the new active round
+      const { data: newRound } = await supabase
+        .from("team_game_rounds")
+        .select("*")
+        .eq("status", "active")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return { round: newRound, resolved: result };
+    } else {
+      // Already resolved by another request, get latest active
+      const { data: activeRound } = await supabase
+        .from("team_game_rounds")
+        .select("*")
+        .eq("status", "active")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return { round: activeRound, resolved: null };
+    }
+  }
+
+  return { round, resolved: null };
 }
 
 Deno.serve(async (req) => {
@@ -77,40 +144,8 @@ Deno.serve(async (req) => {
     if (action === "join") {
       if (!userId) throw new Error("userId required");
 
-      let { data: round } = await supabase
-        .from("team_game_rounds")
-        .select("*")
-        .eq("status", "active")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!round) {
-        const { data: newRound, error: createErr } = await supabase
-          .from("team_game_rounds")
-          .insert({ status: "active" })
-          .select()
-          .single();
-        if (createErr) throw createErr;
-        round = newRound;
-      }
-
-      // Auto-resolve if expired
-      if (shouldResolveRound(round.started_at)) {
-        await resolveRound(supabase, round);
-        const { data: newRound } = await supabase
-          .from("team_game_rounds")
-          .select("*")
-          .eq("status", "active")
-          .order("started_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        round = newRound;
-        if (!round) {
-          const { data: cr } = await supabase.from("team_game_rounds").insert({ status: "active" }).select().single();
-          round = cr;
-        }
-      }
+      const { round } = await getOrCreateActiveRound(supabase);
+      if (!round) throw new Error("Could not get active round");
 
       const { data: existing } = await supabase
         .from("team_game_players")
@@ -193,70 +228,19 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ACTION: status - Get current round status, auto-resolve if expired
+    // ACTION: status
     if (action === "status") {
-      const { data: round } = await supabase
-        .from("team_game_rounds")
-        .select("*")
-        .eq("status", "active")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { round, resolved } = await getOrCreateActiveRound(supabase);
 
       if (!round) {
-        // No active round, create one
-        const { data: newRound } = await supabase
-          .from("team_game_rounds")
-          .insert({ status: "active" })
-          .select()
-          .single();
-
         return new Response(JSON.stringify({
-          round: newRound,
+          round: null,
           redPlayers: 0,
           bluePlayers: 0,
           myPlayer: null,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // Auto-resolve expired round
-      if (shouldResolveRound(round.started_at)) {
-        const result = await resolveRound(supabase, round);
-        console.log("Auto-resolved round", round.id, "winner:", result.winningTeam);
-
-        // Get new active round
-        const { data: newRound } = await supabase
-          .from("team_game_rounds")
-          .select("*")
-          .eq("status", "active")
-          .order("started_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        let myPlayer = null;
-        if (userId && newRound) {
-          const { data: p } = await supabase
-            .from("team_game_players")
-            .select("*")
-            .eq("round_id", newRound.id)
-            .eq("user_id", userId)
-            .maybeSingle();
-          myPlayer = p;
-        }
-
-        return new Response(JSON.stringify({
-          round: newRound,
-          redPlayers: 0,
-          bluePlayers: 0,
-          myPlayer,
-          resolved: {
-            winningTeam: result.winningTeam,
-            roundId: round.id,
-          },
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Round still active
       const { count: redPlayers } = await supabase
         .from("team_game_players")
         .select("*", { count: "exact", head: true })
@@ -280,12 +264,20 @@ Deno.serve(async (req) => {
         myPlayer = p;
       }
 
-      return new Response(JSON.stringify({
+      const response: any = {
         round,
         redPlayers: redPlayers || 0,
         bluePlayers: bluePlayers || 0,
         myPlayer,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      };
+
+      if (resolved) {
+        response.resolved = resolved;
+      }
+
+      return new Response(JSON.stringify(response), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ACTION: history

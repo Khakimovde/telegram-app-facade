@@ -33,9 +33,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if round started before current 20-min slot
+    // Check if round started before current 30-min slot
     const now = new Date();
-    const currentSlotMin = Math.floor(now.getUTCMinutes() / 20) * 20;
+    const currentSlotMin = now.getUTCMinutes() < 30 ? 0 : 30;
     const slotStart = new Date(now);
     slotStart.setUTCMinutes(currentSlotMin, 0, 0);
     
