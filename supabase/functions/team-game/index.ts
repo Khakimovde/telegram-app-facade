@@ -5,31 +5,51 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 30-minute slots: rounds end at :00 and :30
-function shouldResolveRound(startedAt: string): boolean {
+// Returns the start time of the NEXT 30-min slot (i.e. when current round ends)
+function getSlotEnd(): Date {
   const now = new Date();
-  const currentSlotMin = now.getUTCMinutes() < 30 ? 0 : 30;
+  const end = new Date(now);
+  if (now.getUTCMinutes() < 30) {
+    end.setUTCMinutes(30, 0, 0);
+  } else {
+    end.setUTCHours(now.getUTCHours() + 1, 0, 0, 0);
+  }
+  return end;
+}
+
+// Check if a round's slot has ended (started_at is in a previous 30-min slot)
+function isRoundExpired(startedAt: string): boolean {
+  const now = new Date();
   const slotStart = new Date(now);
-  slotStart.setUTCMinutes(currentSlotMin, 0, 0);
+  if (now.getUTCMinutes() < 30) {
+    slotStart.setUTCMinutes(0, 0, 0);
+  } else {
+    slotStart.setUTCMinutes(30, 0, 0);
+  }
   return new Date(startedAt).getTime() < slotStart.getTime();
 }
 
-async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: string } | null> {
-  // Re-check round status to prevent race condition (double resolve)
-  const { data: freshRound } = await supabase
+async function resolveRound(supabase: any, round: any): Promise<string | null> {
+  // Atomically mark as completed (only if still active — prevents double resolve)
+  const { data: updated, error: updateErr } = await supabase
     .from("team_game_rounds")
-    .select("status")
+    .update({
+      status: "completed",
+      ended_at: new Date().toISOString(),
+    })
     .eq("id", round.id)
+    .eq("status", "active")
+    .select()
     .single();
 
-  if (!freshRound || freshRound.status !== "active") {
-    console.log("Round already resolved, skipping:", round.id);
+  if (updateErr || !updated) {
+    console.log("Round already resolved or update failed:", round.id);
     return null;
   }
 
+  // Determine winner based on ad counts (weighted random)
   const totalAds = round.red_ads + round.blue_ads;
   let winningTeam: string;
-
   if (totalAds === 0) {
     winningTeam = Math.random() < 0.5 ? "red" : "blue";
   } else {
@@ -40,25 +60,17 @@ async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: s
   const winPrize = 30;
   const losePrize = 10;
 
-  // Update round status first (acts as a lock)
-  const { error: updateErr } = await supabase
+  // Set winning team and prizes on the round
+  await supabase
     .from("team_game_rounds")
     .update({
-      status: "completed",
-      ended_at: new Date().toISOString(),
       winning_team: winningTeam,
       red_prize: winningTeam === "red" ? winPrize : losePrize,
       blue_prize: winningTeam === "blue" ? winPrize : losePrize,
     })
-    .eq("id", round.id)
-    .eq("status", "active"); // Only update if still active
+    .eq("id", round.id);
 
-  if (updateErr) {
-    console.log("Failed to update round (likely already resolved):", updateErr.message);
-    return null;
-  }
-
-  // Get all players and award prizes
+  // Award prizes to all players who watched at least 1 ad
   const { data: players } = await supabase
     .from("team_game_players")
     .select("*")
@@ -73,14 +85,15 @@ async function resolveRound(supabase: any, round: any): Promise<{ winningTeam: s
 
   console.log(`Round ${round.id} resolved: ${winningTeam} won, ${(players || []).filter((p: any) => p.ads_watched > 0).length} players rewarded`);
 
-  // Create new round
+  // Create new round for the next slot
   await supabase.from("team_game_rounds").insert({ status: "active" });
 
-  return { winningTeam };
+  return winningTeam;
 }
 
-async function getOrCreateActiveRound(supabase: any) {
-  let { data: round } = await supabase
+// Get the active round, resolving expired ones first
+async function getActiveRound(supabase: any) {
+  const { data: round } = await supabase
     .from("team_game_rounds")
     .select("*")
     .eq("status", "active")
@@ -89,41 +102,32 @@ async function getOrCreateActiveRound(supabase: any) {
     .maybeSingle();
 
   if (!round) {
+    // No active round — create one
     const { data: newRound } = await supabase
       .from("team_game_rounds")
       .insert({ status: "active" })
       .select()
       .single();
-    round = newRound;
+    return { round: newRound, resolvedRoundId: null, winningTeam: null };
   }
 
-  // Auto-resolve if expired
-  if (round && shouldResolveRound(round.started_at)) {
-    const result = await resolveRound(supabase, round);
-    if (result) {
-      // Get the new active round
-      const { data: newRound } = await supabase
-        .from("team_game_rounds")
-        .select("*")
-        .eq("status", "active")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return { round: newRound, resolved: result };
-    } else {
-      // Already resolved by another request, get latest active
-      const { data: activeRound } = await supabase
-        .from("team_game_rounds")
-        .select("*")
-        .eq("status", "active")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return { round: activeRound, resolved: null };
-    }
+  if (isRoundExpired(round.started_at)) {
+    const resolvedRoundId = round.id;
+    const winningTeam = await resolveRound(supabase, round);
+
+    // Get the newly created active round
+    const { data: newRound } = await supabase
+      .from("team_game_rounds")
+      .select("*")
+      .eq("status", "active")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return { round: newRound, resolvedRoundId, winningTeam };
   }
 
-  return { round, resolved: null };
+  return { round, resolvedRoundId: null, winningTeam: null };
 }
 
 Deno.serve(async (req) => {
@@ -140,13 +144,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ACTION: join
+    // ─── ACTION: join ───
     if (action === "join") {
       if (!userId) throw new Error("userId required");
 
-      const { round } = await getOrCreateActiveRound(supabase);
+      const { round } = await getActiveRound(supabase);
       if (!round) throw new Error("Could not get active round");
 
+      // Check if already joined this round
       const { data: existing } = await supabase
         .from("team_game_players")
         .select("*")
@@ -161,7 +166,6 @@ Deno.serve(async (req) => {
       }
 
       const team = Math.random() < 0.5 ? "red" : "blue";
-
       const { data: player, error: insertErr } = await supabase
         .from("team_game_players")
         .insert({ round_id: round.id, user_id: userId, team })
@@ -175,10 +179,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: watch-ad
+    // ─── ACTION: watch-ad ───
     if (action === "watch-ad") {
       if (!userId) throw new Error("userId required");
 
+      // Get current active round WITHOUT resolving (don't resolve mid-play)
       const { data: round } = await supabase
         .from("team_game_rounds")
         .select("*")
@@ -189,6 +194,11 @@ Deno.serve(async (req) => {
 
       if (!round) throw new Error("No active round");
 
+      // Don't allow ad watching on expired rounds
+      if (isRoundExpired(round.started_at)) {
+        throw new Error("Round has ended, please wait for results");
+      }
+
       const { data: player } = await supabase
         .from("team_game_players")
         .select("*")
@@ -198,26 +208,37 @@ Deno.serve(async (req) => {
 
       if (!player) throw new Error("Not in this round");
 
+      // Increment player's ad count
       await supabase
         .from("team_game_players")
         .update({ ads_watched: player.ads_watched + 1 })
         .eq("id", player.id);
 
+      // Increment team's ad count on the round
       const field = player.team === "red" ? "red_ads" : "blue_ads";
       await supabase
         .from("team_game_rounds")
         .update({ [field]: round[field] + 1 })
         .eq("id", round.id);
 
+      // Log the ad watch
       await supabase.from("ad_watch_log").insert({
         user_id: userId,
         type: "team_game",
         slot_key: `team-${round.id}`,
       });
 
-      const { data: usr } = await supabase.from("users").select("ads_watched_total").eq("id", userId).maybeSingle();
+      // Update user's total ads watched
+      const { data: usr } = await supabase
+        .from("users")
+        .select("ads_watched_total")
+        .eq("id", userId)
+        .maybeSingle();
       if (usr) {
-        await supabase.from("users").update({ ads_watched_total: usr.ads_watched_total + 1 }).eq("id", userId);
+        await supabase
+          .from("users")
+          .update({ ads_watched_total: usr.ads_watched_total + 1 })
+          .eq("id", userId);
       }
 
       return new Response(JSON.stringify({
@@ -228,9 +249,31 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ACTION: status
+    // ─── ACTION: status ───
     if (action === "status") {
-      const { round, resolved } = await getOrCreateActiveRound(supabase);
+      const { round, resolvedRoundId, winningTeam } = await getActiveRound(supabase);
+
+      let userResult = null;
+
+      // If a round was just resolved AND user provided userId, check if they participated
+      if (resolvedRoundId && winningTeam && userId) {
+        const { data: playerInResolved } = await supabase
+          .from("team_game_players")
+          .select("*")
+          .eq("round_id", resolvedRoundId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (playerInResolved && playerInResolved.ads_watched > 0) {
+          const won = playerInResolved.team === winningTeam;
+          userResult = {
+            won,
+            team: playerInResolved.team,
+            prize: won ? 30 : 10,
+            winningTeam,
+          };
+        }
+      }
 
       if (!round) {
         return new Response(JSON.stringify({
@@ -238,6 +281,7 @@ Deno.serve(async (req) => {
           redPlayers: 0,
           bluePlayers: 0,
           myPlayer: null,
+          userResult,
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
@@ -264,23 +308,16 @@ Deno.serve(async (req) => {
         myPlayer = p;
       }
 
-      const response: any = {
+      return new Response(JSON.stringify({
         round,
         redPlayers: redPlayers || 0,
         bluePlayers: bluePlayers || 0,
         myPlayer,
-      };
-
-      if (resolved) {
-        response.resolved = resolved;
-      }
-
-      return new Response(JSON.stringify(response), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        userResult,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ACTION: history
+    // ─── ACTION: history ───
     if (action === "history") {
       if (!userId) throw new Error("userId required");
 

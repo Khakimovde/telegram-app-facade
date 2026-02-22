@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Swords, Tv, Clock, Trophy, History, Users, Flame } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Swords, Tv, Clock, Trophy, History, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import AdWatchDialog from "@/components/AdWatchDialog";
@@ -36,6 +36,13 @@ interface HistoryItem {
   };
 }
 
+interface UserResult {
+  won: boolean;
+  team: string;
+  prize: number;
+  winningTeam: string;
+}
+
 const TeamGamePage = () => {
   const { user, refreshUser } = useUser();
   const [round, setRound] = useState<RoundData | null>(null);
@@ -43,76 +50,14 @@ const TeamGamePage = () => {
   const [redPlayers, setRedPlayers] = useState(0);
   const [bluePlayers, setBluePlayers] = useState(0);
   const [adDialogOpen, setAdDialogOpen] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(() => {
-    const now = new Date();
-    const min = now.getMinutes();
-    const sec = now.getSeconds();
-    const nextSlot = min < 30 ? 30 : 60;
-    const remaining = (nextSlot - min - 1) * 60 + (59 - sec);
-    return { minutes: Math.floor(remaining / 60), seconds: remaining % 60 };
-  });
+  const [timeLeft, setTimeLeft] = useState({ minutes: 0, seconds: 0 });
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [resultModal, setResultModal] = useState<{ won: boolean; team: string; prize: number; winningTeam: string } | null>(null);
-  const [lastRoundId, setLastRoundId] = useState<string | null>(null);
+  const [resultModal, setResultModal] = useState<UserResult | null>(null);
   const [joining, setJoining] = useState(false);
+  const shownResultRef = useRef<string | null>(null); // Track which resolved round we already showed
 
-  const loadStatus = useCallback(async () => {
-    if (!user) return;
-    try {
-      const data = await teamGameStatus(user.id);
-      
-      // Check if server auto-resolved a round
-      if (data.resolved && myPlayer) {
-        const histData = await teamGameHistory(user.id);
-        setHistory(histData);
-        const lastGame = histData.find((h: HistoryItem) => h.team_game_rounds?.winning_team);
-        if (lastGame && lastGame.team_game_rounds?.winning_team) {
-          const won = lastGame.team === lastGame.team_game_rounds.winning_team;
-          setResultModal({
-            won,
-            team: lastGame.team,
-            prize: lastGame.prize,
-            winningTeam: lastGame.team_game_rounds.winning_team,
-          });
-        }
-        setMyPlayer(null);
-        await refreshUser();
-      } else if (data.round) {
-        // Check if round changed (new round started = old one resolved)
-        if (lastRoundId && data.round.id !== lastRoundId && myPlayer) {
-          const histData = await teamGameHistory(user.id);
-          setHistory(histData);
-          const lastGame = histData.find((h: HistoryItem) => h.team_game_rounds?.winning_team);
-          if (lastGame && lastGame.team_game_rounds?.winning_team) {
-            const won = lastGame.team === lastGame.team_game_rounds.winning_team;
-            setResultModal({
-              won,
-              team: lastGame.team,
-              prize: lastGame.prize,
-              winningTeam: lastGame.team_game_rounds.winning_team,
-            });
-          }
-          setMyPlayer(null);
-          await refreshUser();
-        }
-      }
-
-      if (data.round) {
-        setRound(data.round);
-        setLastRoundId(data.round.id);
-        setRedPlayers(data.redPlayers || 0);
-        setBluePlayers(data.bluePlayers || 0);
-        if (data.myPlayer) setMyPlayer(data.myPlayer);
-      }
-    } catch {
-      // silent
-    }
-  }, [user, lastRoundId, myPlayer, refreshUser]);
-
-  useEffect(() => { loadStatus(); }, [loadStatus]);
-
-  // Timer - always runs, independent of round state
+  // Timer - counts down to next :00 or :30
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
@@ -130,7 +75,39 @@ const TeamGamePage = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Polling every 10s
+  const loadStatus = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await teamGameStatus(user.id);
+
+      // If server resolved a round and user participated, show result modal ONCE
+      if (data.userResult && data.userResult.winningTeam) {
+        const resultKey = `${data.userResult.winningTeam}-${data.userResult.team}-${data.userResult.prize}`;
+        if (shownResultRef.current !== resultKey) {
+          shownResultRef.current = resultKey;
+          setResultModal(data.userResult);
+          setMyPlayer(null); // Reset player for new round
+          await refreshUser();
+          // Refresh history
+          const histData = await teamGameHistory(user.id);
+          setHistory(histData);
+        }
+      }
+
+      if (data.round) {
+        setRound(data.round);
+        setRedPlayers(data.redPlayers || 0);
+        setBluePlayers(data.bluePlayers || 0);
+        if (data.myPlayer) setMyPlayer(data.myPlayer);
+      }
+    } catch {
+      // silent
+    }
+  }, [user, refreshUser]);
+
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  // Poll every 10s
   useEffect(() => {
     const interval = setInterval(loadStatus, 10000);
     return () => clearInterval(interval);
@@ -143,7 +120,7 @@ const TeamGamePage = () => {
       const data = await teamGameJoin(user.id);
       setRound(data.round);
       setMyPlayer(data.player);
-      setLastRoundId(data.round.id);
+      shownResultRef.current = null; // Reset so next result can be shown
       const teamEmoji = data.player.team === "red" ? "🔴" : "🔵";
       toast.success(`${teamEmoji} ${data.player.team === "red" ? "Qizil" : "Ko'k"} jamoaga qo'shildingiz!`);
     } catch {
@@ -167,8 +144,13 @@ const TeamGamePage = () => {
         setMyPlayer((prev) => prev ? { ...prev, ads_watched: result.player_ads } : prev);
         await refreshUser();
       }
-    } catch {
-      toast.error("Xatolik yuz berdi");
+    } catch (e: any) {
+      if (e?.message?.includes("ended")) {
+        toast.info("⏰ Raund tugadi, natijalar tez orada chiqadi");
+        loadStatus();
+      } else {
+        toast.error("Xatolik yuz berdi");
+      }
     }
   };
 
@@ -203,7 +185,6 @@ const TeamGamePage = () => {
 
         {/* Battle Arena */}
         <div className="relative mb-3">
-          {/* Progress bar */}
           <div className="h-10 rounded-xl overflow-hidden flex bg-muted/30 border border-border">
             <div
               className="h-full transition-all duration-700 ease-out flex items-center justify-center relative"
@@ -231,7 +212,6 @@ const TeamGamePage = () => {
             </div>
           </div>
 
-          {/* VS badge */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-card border-2 border-accent flex items-center justify-center shadow-lg z-10">
             <span className="text-[10px] font-black text-accent">VS</span>
           </div>
@@ -400,7 +380,7 @@ const TeamGamePage = () => {
         </ul>
       </div>
 
-      {/* Result Modal */}
+      {/* Result Modal — only shown to participants */}
       <Dialog open={!!resultModal} onOpenChange={(v) => { if (!v) setResultModal(null); }}>
         <DialogContent className="max-w-[340px] rounded-2xl p-0 overflow-hidden border-none">
           <div
@@ -434,7 +414,7 @@ const TeamGamePage = () => {
             <p className="text-sm font-semibold text-foreground">
               {resultModal?.won
                 ? `Siz ${resultModal.prize} tanga yutdingiz!`
-                : `Sizga ${resultModal?.prize || 20} tanga berildi.`}
+                : `Sizga ${resultModal?.prize || 10} tanga berildi.`}
             </p>
             <button
               onClick={() => setResultModal(null)}
