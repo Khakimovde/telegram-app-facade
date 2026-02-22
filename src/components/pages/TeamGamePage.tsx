@@ -41,6 +41,7 @@ interface UserResult {
   team: string;
   prize: number;
   winningTeam: string;
+  roundId: string;
 }
 
 const TeamGamePage = () => {
@@ -55,7 +56,8 @@ const TeamGamePage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [resultModal, setResultModal] = useState<UserResult | null>(null);
   const [joining, setJoining] = useState(false);
-  const shownResultRef = useRef<string | null>(null); // Track which resolved round we already showed
+  const shownResultRef = useRef<string | null>(null);
+  const timerTriggeredRef = useRef(false);
 
   // Timer - counts down to next :00 or :30
   useEffect(() => {
@@ -65,10 +67,26 @@ const TeamGamePage = () => {
       const sec = now.getSeconds();
       const nextSlot = min < 30 ? 30 : 60;
       const totalRemaining = (nextSlot - min - 1) * 60 + (59 - sec);
-      setTimeLeft({
-        minutes: Math.floor(totalRemaining / 60),
-        seconds: totalRemaining % 60,
-      });
+
+      const newMinutes = Math.floor(totalRemaining / 60);
+      const newSeconds = totalRemaining % 60;
+
+      setTimeLeft({ minutes: newMinutes, seconds: newSeconds });
+
+      // When timer hits 0, trigger resolution
+      if (totalRemaining <= 0 && !timerTriggeredRef.current) {
+        timerTriggeredRef.current = true;
+        // Small delay to ensure server-side time has also passed
+        setTimeout(() => {
+          // Force a fresh status check that will resolve the round
+          window.dispatchEvent(new CustomEvent("team-game-resolve"));
+        }, 2000);
+      }
+
+      // Reset trigger flag when we're past the 0 mark (new slot)
+      if (totalRemaining > 2) {
+        timerTriggeredRef.current = false;
+      }
     };
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
@@ -81,14 +99,12 @@ const TeamGamePage = () => {
       const data = await teamGameStatus(user.id);
 
       // If server resolved a round and user participated, show result modal ONCE
-      if (data.userResult && data.userResult.winningTeam) {
-        const resultKey = `${data.userResult.winningTeam}-${data.userResult.team}-${data.userResult.prize}`;
-        if (shownResultRef.current !== resultKey) {
-          shownResultRef.current = resultKey;
+      if (data.userResult && data.userResult.winningTeam && data.userResult.roundId) {
+        if (shownResultRef.current !== data.userResult.roundId) {
+          shownResultRef.current = data.userResult.roundId;
           setResultModal(data.userResult);
-          setMyPlayer(null); // Reset player for new round
+          setMyPlayer(null);
           await refreshUser();
-          // Refresh history
           const histData = await teamGameHistory(user.id);
           setHistory(histData);
         }
@@ -113,6 +129,15 @@ const TeamGamePage = () => {
     return () => clearInterval(interval);
   }, [loadStatus]);
 
+  // Listen for timer-triggered resolution
+  useEffect(() => {
+    const handler = () => {
+      loadStatus();
+    };
+    window.addEventListener("team-game-resolve", handler);
+    return () => window.removeEventListener("team-game-resolve", handler);
+  }, [loadStatus]);
+
   const handleJoin = async () => {
     if (!user || joining) return;
     setJoining(true);
@@ -120,7 +145,7 @@ const TeamGamePage = () => {
       const data = await teamGameJoin(user.id);
       setRound(data.round);
       setMyPlayer(data.player);
-      shownResultRef.current = null; // Reset so next result can be shown
+      shownResultRef.current = null;
       const teamEmoji = data.player.team === "red" ? "🔴" : "🔵";
       toast.success(`${teamEmoji} ${data.player.team === "red" ? "Qizil" : "Ko'k"} jamoaga qo'shildingiz!`);
     } catch {

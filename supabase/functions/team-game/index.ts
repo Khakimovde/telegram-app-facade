@@ -271,6 +271,7 @@ Deno.serve(async (req) => {
             team: playerInResolved.team,
             prize: won ? 30 : 10,
             winningTeam,
+            roundId: resolvedRoundId,
           };
         }
       }
