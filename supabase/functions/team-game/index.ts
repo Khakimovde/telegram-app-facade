@@ -77,7 +77,7 @@ async function resolveRound(supabase: any, round: any): Promise<string | null> {
     .eq("round_id", round.id);
 
   for (const p of (players || [])) {
-    if (p.ads_watched === 0) continue;
+    if (p.ads_watched < 10) continue;
     const prize = p.team === winningTeam ? winPrize : losePrize;
     await supabase.from("team_game_players").update({ prize }).eq("id", p.id);
     await supabase.rpc("add_balance", { p_user_id: p.user_id, p_amount: prize });
@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
           .eq("user_id", userId)
           .maybeSingle();
 
-        if (playerInResolved && playerInResolved.ads_watched > 0) {
+        if (playerInResolved && playerInResolved.ads_watched >= 10) {
           const won = playerInResolved.team === winningTeam;
           userResult = {
             won,
