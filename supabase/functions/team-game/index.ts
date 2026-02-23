@@ -256,17 +256,17 @@ Deno.serve(async (req) => {
       let userResult = null;
 
       if (userId) {
-        // Always check the most recently completed round for this user's participation
-        // This ensures the result is available even if another user's call resolved the round
+        // Check the most recently completed round, but only if it ended recently (within 35 min)
         let checkRoundId = resolvedRoundId;
         let checkWinningTeam = winningTeam;
 
         if (!checkRoundId) {
-          // Find the last completed round
+          const thirtyFiveMinAgo = new Date(Date.now() - 35 * 60 * 1000).toISOString();
           const { data: lastCompleted } = await supabase
             .from("team_game_rounds")
-            .select("id, winning_team")
+            .select("id, winning_team, ended_at")
             .eq("status", "completed")
+            .gte("ended_at", thirtyFiveMinAgo)
             .order("ended_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -285,6 +285,7 @@ Deno.serve(async (req) => {
             .eq("user_id", userId)
             .maybeSingle();
 
+          // STRICT: only 10+ ads count as participation
           if (playerInResolved && playerInResolved.ads_watched >= 10) {
             const won = playerInResolved.team === checkWinningTeam;
             userResult = {

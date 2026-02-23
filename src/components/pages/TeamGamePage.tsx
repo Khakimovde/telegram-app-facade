@@ -56,9 +56,24 @@ const TeamGamePage = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [resultModal, setResultModal] = useState<UserResult | null>(null);
   const [joining, setJoining] = useState(false);
-  const shownResultRef = useRef<string | null>(null);
   const timerTriggeredRef = useRef(false);
   const loadStatusRef = useRef<() => void>(() => {});
+
+  // Track shown results in localStorage to prevent re-showing on page reload
+  const isResultShown = (roundId: string) => {
+    try {
+      const shown = JSON.parse(localStorage.getItem("shownGameResults") || "[]");
+      return shown.includes(roundId);
+    } catch { return false; }
+  };
+  const markResultShown = (roundId: string) => {
+    try {
+      const shown = JSON.parse(localStorage.getItem("shownGameResults") || "[]");
+      shown.push(roundId);
+      // Keep only last 20
+      localStorage.setItem("shownGameResults", JSON.stringify(shown.slice(-20)));
+    } catch {}
+  };
 
   // Timer - counts down to next :00 or :30
   useEffect(() => {
@@ -101,8 +116,8 @@ const TeamGamePage = () => {
 
       // If server resolved a round and user participated, show result modal ONCE
       if (data.userResult && data.userResult.winningTeam && data.userResult.roundId) {
-        if (shownResultRef.current !== data.userResult.roundId) {
-          shownResultRef.current = data.userResult.roundId;
+        if (!isResultShown(data.userResult.roundId)) {
+          markResultShown(data.userResult.roundId);
           setResultModal(data.userResult);
           setMyPlayer(null);
           await refreshUser();
@@ -140,7 +155,7 @@ const TeamGamePage = () => {
       const data = await teamGameJoin(user.id);
       setRound(data.round);
       setMyPlayer(data.player);
-      shownResultRef.current = null;
+      // Reset shown results so new round results can show
       const teamEmoji = data.player.team === "red" ? "🔴" : "🔵";
       toast.success(`${teamEmoji} ${data.player.team === "red" ? "Qizil" : "Ko'k"} jamoaga qo'shildingiz!`);
     } catch {
