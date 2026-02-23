@@ -255,24 +255,46 @@ Deno.serve(async (req) => {
 
       let userResult = null;
 
-      // If a round was just resolved AND user provided userId, check if they participated
-      if (resolvedRoundId && winningTeam && userId) {
-        const { data: playerInResolved } = await supabase
-          .from("team_game_players")
-          .select("*")
-          .eq("round_id", resolvedRoundId)
-          .eq("user_id", userId)
-          .maybeSingle();
+      if (userId) {
+        // Always check the most recently completed round for this user's participation
+        // This ensures the result is available even if another user's call resolved the round
+        let checkRoundId = resolvedRoundId;
+        let checkWinningTeam = winningTeam;
 
-        if (playerInResolved && playerInResolved.ads_watched >= 10) {
-          const won = playerInResolved.team === winningTeam;
-          userResult = {
-            won,
-            team: playerInResolved.team,
-            prize: won ? 30 : 10,
-            winningTeam,
-            roundId: resolvedRoundId,
-          };
+        if (!checkRoundId) {
+          // Find the last completed round
+          const { data: lastCompleted } = await supabase
+            .from("team_game_rounds")
+            .select("id, winning_team")
+            .eq("status", "completed")
+            .order("ended_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (lastCompleted) {
+            checkRoundId = lastCompleted.id;
+            checkWinningTeam = lastCompleted.winning_team;
+          }
+        }
+
+        if (checkRoundId && checkWinningTeam) {
+          const { data: playerInResolved } = await supabase
+            .from("team_game_players")
+            .select("*")
+            .eq("round_id", checkRoundId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (playerInResolved && playerInResolved.ads_watched >= 10) {
+            const won = playerInResolved.team === checkWinningTeam;
+            userResult = {
+              won,
+              team: playerInResolved.team,
+              prize: won ? 30 : 10,
+              winningTeam: checkWinningTeam,
+              roundId: checkRoundId,
+            };
+          }
         }
       }
 
