@@ -73,18 +73,22 @@ const TeamGamePage = () => {
 
       setTimeLeft({ minutes: newMinutes, seconds: newSeconds });
 
-      // When timer hits 0, trigger resolution
-      if (totalRemaining <= 0 && !timerTriggeredRef.current) {
+      // When timer hits 0, trigger resolution with retries
+      if (totalRemaining <= 1 && !timerTriggeredRef.current) {
         timerTriggeredRef.current = true;
-        // Small delay to ensure server-side time has also passed
-        setTimeout(() => {
-          // Force a fresh status check that will resolve the round
-          window.dispatchEvent(new CustomEvent("team-game-resolve"));
-        }, 2000);
+        // Try multiple times with delays to ensure server resolves
+        const tryResolve = async (attempt: number) => {
+          if (attempt > 5) return;
+          await new Promise(r => setTimeout(r, 2000 + attempt * 1000));
+          window.dispatchEvent(new CustomEvent("team-game-resolve", { detail: { attempt } }));
+        };
+        tryResolve(0);
+        tryResolve(1);
+        tryResolve(2);
       }
 
-      // Reset trigger flag when we're past the 0 mark (new slot)
-      if (totalRemaining > 2) {
+      // Reset trigger flag when we're well into the new slot
+      if (totalRemaining > 5) {
         timerTriggeredRef.current = false;
       }
     };
@@ -401,7 +405,7 @@ const TeamGamePage = () => {
           <li>• Ko'p reklama = yuqori yutish ehtimoli</li>
           <li>• Raund har 30 daqiqada o'tkaziladi (00 va 30 daqiqalarda)</li>
           <li>• G'olib jamoa: 30 tanga | Yutqazganlar: 10 tanga</li>
-          <li>• Kamida 1 ta reklama ko'rgan o'yinchilar mukofot oladi</li>
+          <li>• Kamida 10 ta reklama ko'rgan o'yinchilar mukofot oladi</li>
         </ul>
       </div>
 
