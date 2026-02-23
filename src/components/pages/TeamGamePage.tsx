@@ -58,6 +58,7 @@ const TeamGamePage = () => {
   const [joining, setJoining] = useState(false);
   const shownResultRef = useRef<string | null>(null);
   const timerTriggeredRef = useRef(false);
+  const loadStatusRef = useRef<() => void>(() => {});
 
   // Timer - counts down to next :00 or :30
   useEffect(() => {
@@ -74,21 +75,17 @@ const TeamGamePage = () => {
       setTimeLeft({ minutes: newMinutes, seconds: newSeconds });
 
       // When timer hits 0, trigger resolution with retries
-      if (totalRemaining <= 1 && !timerTriggeredRef.current) {
+      if (totalRemaining <= 0 && !timerTriggeredRef.current) {
         timerTriggeredRef.current = true;
-        // Try multiple times with delays to ensure server resolves
-        const tryResolve = async (attempt: number) => {
-          if (attempt > 5) return;
-          await new Promise(r => setTimeout(r, 2000 + attempt * 1000));
-          window.dispatchEvent(new CustomEvent("team-game-resolve", { detail: { attempt } }));
-        };
-        tryResolve(0);
-        tryResolve(1);
-        tryResolve(2);
+        for (let i = 0; i < 6; i++) {
+          setTimeout(() => {
+            loadStatusRef.current();
+          }, 1000 + i * 2000);
+        }
       }
 
       // Reset trigger flag when we're well into the new slot
-      if (totalRemaining > 5) {
+      if (totalRemaining > 10) {
         timerTriggeredRef.current = false;
       }
     };
@@ -125,21 +122,15 @@ const TeamGamePage = () => {
     }
   }, [user, refreshUser]);
 
+  // Keep ref in sync
+  useEffect(() => { loadStatusRef.current = loadStatus; }, [loadStatus]);
+
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
   // Poll every 10s
   useEffect(() => {
     const interval = setInterval(loadStatus, 10000);
     return () => clearInterval(interval);
-  }, [loadStatus]);
-
-  // Listen for timer-triggered resolution
-  useEffect(() => {
-    const handler = () => {
-      loadStatus();
-    };
-    window.addEventListener("team-game-resolve", handler);
-    return () => window.removeEventListener("team-game-resolve", handler);
   }, [loadStatus]);
 
   const handleJoin = async () => {
