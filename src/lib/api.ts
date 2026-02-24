@@ -156,8 +156,24 @@ export async function checkChannelMembership(userId: string, channelUsername: st
   return callEdge("check-channel", { userId, channelUsername, taskId });
 }
 
-export async function watchAd(userId: string, type: "vazifa" | "reklama") {
+export async function watchAd(userId: string, type: "vazifa" | "reklama" | "oyin") {
   return callEdge("watch-ad", { userId, type });
+}
+
+export async function getOyinAdsCount(userId: string): Promise<{ current: number; slotKey: string }> {
+  const now = new Date();
+  const h = now.getUTCHours();
+  const slot = now.getUTCMinutes() < 30 ? 0 : 30;
+  const slotKey = `oyin-${now.toISOString().split("T")[0]}-${h}-${slot}`;
+
+  const { count } = await supabase
+    .from("ad_watch_log")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("type", "oyin")
+    .eq("slot_key", slotKey);
+
+  return { current: count || 0, slotKey };
 }
 
 export async function enterAuction(userId: string) {

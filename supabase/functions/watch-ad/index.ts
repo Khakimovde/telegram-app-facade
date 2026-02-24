@@ -52,13 +52,21 @@ async function addReferralEarnings(supabase: ReturnType<typeof createClient>, us
   }
 }
 
+// Get 30-minute slot key (resets at :00 and :30)
+function getOyinSlotKey(): string {
+  const now = new Date();
+  const h = now.getUTCHours();
+  const slot = now.getUTCMinutes() < 30 ? 0 : 30;
+  return `oyin-${now.toISOString().split("T")[0]}-${h}-${slot}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { userId, type } = await req.json(); // type: 'vazifa' | 'reklama'
+    const { userId, type } = await req.json(); // type: 'vazifa' | 'reklama' | 'oyin'
     if (!userId || !type) throw new Error("userId and type required");
 
     const supabase = createClient(
@@ -112,7 +120,56 @@ Deno.serve(async (req) => {
         await supabase.from("users").update({ ads_watched_total: adUser.ads_watched_total + 1 }).eq("id", userId);
       }
 
-      // Add referral earnings if earned
+      if (earnedAmount > 0) {
+        await addReferralEarnings(supabase, userId, earnedAmount);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, current: newCount, max: maxAds, earned: earnedAmount }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (type === "oyin") {
+      // 30-minute slots, 10 ads max, 20 tanga reward
+      const slotKey = getOyinSlotKey();
+      const maxAds = 10;
+
+      const { count } = await supabase
+        .from("ad_watch_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("type", type)
+        .eq("slot_key", slotKey);
+
+      const currentCount = count || 0;
+      if (currentCount >= maxAds) {
+        return new Response(
+          JSON.stringify({ success: false, current: currentCount, max: maxAds }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await supabase.from("ad_watch_log").insert({
+        user_id: userId,
+        type,
+        slot_key: slotKey,
+      });
+
+      const newCount = currentCount + 1;
+
+      // Give 20 tanga when 10/10 is complete
+      if (newCount >= maxAds) {
+        earnedAmount = 20;
+        await supabase.rpc("add_balance", { p_user_id: userId, p_amount: 20 });
+      }
+
+      // Update ads_watched_total
+      const { data: adUser } = await supabase.from("users").select("ads_watched_total").eq("id", userId).single();
+      if (adUser) {
+        await supabase.from("users").update({ ads_watched_total: adUser.ads_watched_total + 1 }).eq("id", userId);
+      }
+
       if (earnedAmount > 0) {
         await addReferralEarnings(supabase, userId, earnedAmount);
       }
@@ -124,21 +181,17 @@ Deno.serve(async (req) => {
     }
 
     if (type === "reklama") {
-      // Unlimited ads - no slot limit
-      // Just log it
       await supabase.from("ad_watch_log").insert({
         user_id: userId,
         type,
         slot_key: `reklama-${now.toISOString().split("T")[0]}`,
       });
 
-      // Give 2 tickets immediately
       const { data: ticketUser } = await supabase.from("users").select("tickets").eq("id", userId).single();
       if (ticketUser) {
         await supabase.from("users").update({ tickets: ticketUser.tickets + 2 }).eq("id", userId);
       }
 
-      // Update ads_watched_total
       const { data: adUser } = await supabase.from("users").select("ads_watched_total").eq("id", userId).single();
       if (adUser) {
         await supabase.from("users").update({ ads_watched_total: adUser.ads_watched_total + 1 }).eq("id", userId);

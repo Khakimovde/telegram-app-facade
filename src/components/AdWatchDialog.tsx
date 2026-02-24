@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, CheckCircle2, Loader2, Tv } from "lucide-react";
+import { Play, CheckCircle2, Loader2, ExternalLink } from "lucide-react";
+
+const AD_URL = "https://crn77.com/4/10640772";
 
 interface AdWatchDialogProps {
   open: boolean;
@@ -9,66 +11,41 @@ interface AdWatchDialogProps {
   adsWatched: number;
   maxAds: number;
   reward: string;
-  timerDuration?: number;
   unlimited?: boolean;
 }
 
-const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, timerDuration = 10, unlimited = false }: AdWatchDialogProps) => {
+const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false }: AdWatchDialogProps) => {
   const [phase, setPhase] = useState<"idle" | "watching" | "done">("idle");
-  const [countdown, setCountdown] = useState(timerDuration);
 
-  useEffect(() => {
-    if (!document.querySelector('script[data-zone="10626599"]')) {
-      const script = document.createElement("script");
-      script.src = "//munqu.com/sdk.js";
-      script.setAttribute("data-zone", "10626599");
-      script.setAttribute("data-sdk", "show_10626599");
-      script.async = true;
-      document.body.appendChild(script);
+  const openAdLink = () => {
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.openLink(AD_URL);
+    } else {
+      window.open(AD_URL, "_blank");
     }
-  }, []);
+  };
 
   const handleWatch = useCallback(async () => {
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
     setPhase("watching");
-    setCountdown(timerDuration);
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = window as any;
-      if (typeof w.show_10626599 === "function") {
-        w.show_10626599();
-      }
-    } catch (e) {
-      console.log("Munqu ad SDK not available:", e);
-    }
+    // Open ad link in new window
+    openAdLink();
 
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    await new Promise((r) => setTimeout(r, timerDuration * 1000));
-    clearInterval(timer);
+    // Wait 5 seconds for user to view ad
+    await new Promise((r) => setTimeout(r, 5000));
 
     try {
       await onWatch();
       setPhase("done");
       setTimeout(() => {
         setPhase("idle");
-        setCountdown(timerDuration);
-      }, 1500);
+      }, 1200);
     } catch {
       setPhase("idle");
-      setCountdown(timerDuration);
     }
-  }, [adsWatched, maxAds, phase, onWatch, timerDuration, unlimited]);
+  }, [adsWatched, maxAds, phase, onWatch, unlimited]);
 
   const completed = !unlimited && adsWatched >= maxAds;
 
@@ -115,12 +92,10 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
           {phase === "watching" ? (
             <div className="text-center py-4">
               <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center relative">
-                <Loader2 className="w-10 h-10 text-primary animate-spin absolute" />
-                <span className="text-lg font-bold text-primary z-10">{countdown}</span>
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
               </div>
-              <p className="text-sm font-semibold text-foreground">Reklama ko'rilmoqda...</p>
+              <p className="text-sm font-semibold text-foreground">Reklama tekshirilmoqda...</p>
               <p className="text-xs text-muted-foreground mt-1">Iltimos, kutib turing</p>
-              <div id="munqu-ad-container" className="mt-3 min-h-[50px]" />
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
@@ -140,7 +115,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
               onClick={handleWatch}
               className="w-full gradient-primary text-primary-foreground font-semibold py-3 rounded-xl active:scale-[0.97] transition-transform text-sm flex items-center justify-center gap-2"
             >
-              <Play size={18} />
+              <ExternalLink size={18} />
               Reklama ko'rish
             </button>
           )}
