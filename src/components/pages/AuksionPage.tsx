@@ -319,7 +319,6 @@ const AuksionPage = () => {
         adsWatched={0}
         maxAds={999}
         reward="+2 chipta"
-        timerDuration={15}
         unlimited
       />
     </div>
