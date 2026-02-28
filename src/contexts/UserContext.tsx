@@ -57,12 +57,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const tg = getTelegramUser();
 
         if (tg?.initData && tg.user) {
+          const telegramId = String(tg.user.id);
           const referrerId = tg.startParam?.startsWith("ref_")
             ? tg.startParam.replace("ref_", "")
             : undefined;
 
-          const dbUser = await authenticateUser(tg.initData, referrerId);
-          setUser(dbUser);
+          // Try auth with race timeout (12s max)
+          let dbUser: DbUser | null = null;
+          try {
+            dbUser = await Promise.race([
+              authenticateUser(tg.initData, referrerId),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("AUTH_TIMEOUT")), 12000)
+              ),
+            ]);
+          } catch (authErr) {
+            console.warn("Auth edge call failed, trying direct fetch:", authErr);
+            // Fallback: user might already exist from webhook
+            dbUser = await fetchCurrentUser(telegramId);
+          }
+
+          if (dbUser) {
+            setUser(dbUser);
+          } else {
+            setError("Foydalanuvchi topilmadi. Botga /start yuboring.");
+          }
 
           window.Telegram?.WebApp.ready();
           window.Telegram?.WebApp.expand();
