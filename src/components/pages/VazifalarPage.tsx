@@ -41,7 +41,6 @@ const VazifalarPage = () => {
     const getNextReset = () => {
       const now = new Date();
       const h = now.getHours();
-      // Every 2 hours: 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22
       const nextSlot = Math.ceil((h + 1) / 2) * 2;
       const next = new Date(now);
       if (nextSlot >= 24) { next.setDate(next.getDate() + 1); next.setHours(0, 0, 0, 0); }
@@ -135,11 +134,11 @@ const VazifalarPage = () => {
         <button
           onClick={() => setAdDialogOpen(true)}
           disabled={adsCompleted}
-          className="w-full text-left bg-card rounded-xl p-4 card-shadow active:scale-[0.98] transition-transform disabled:opacity-80"
+          className="w-full text-left bg-card rounded-2xl p-4 card-3d active:scale-[0.98] transition-transform disabled:opacity-80"
         >
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-xl bg-destructive/10 flex items-center justify-center text-2xl shrink-0">
-              <Tv size={28} className="text-destructive" />
+            <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center text-2xl shrink-0 btn-3d">
+              <Tv size={28} className="text-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-foreground text-base">Reklama ko'rish</h3>
@@ -158,8 +157,8 @@ const VazifalarPage = () => {
               <ChevronRight className="text-muted-foreground shrink-0" size={20} />
             )}
           </div>
-          <div className="mt-3 w-full bg-muted rounded-full h-2">
-            <div className="gradient-coin h-2 rounded-full transition-all duration-500" style={{ width: `${(adsWatched / 10) * 100}%` }} />
+          <div className="mt-3 w-full bg-muted rounded-full h-2.5">
+            <div className="gradient-coin h-2.5 rounded-full transition-all duration-500" style={{ width: `${(adsWatched / 10) * 100}%` }} />
           </div>
           {adsCompleted && (
             <div className="flex items-center gap-1 mt-2 justify-center">
@@ -176,10 +175,10 @@ const VazifalarPage = () => {
               key={task.id}
               onClick={() => !isCompleted && handleOpenChannel(task)}
               disabled={isCompleted}
-              className="w-full text-left bg-card rounded-lg p-3 card-shadow active:scale-[0.98] transition-transform disabled:opacity-80"
+              className="w-full text-left bg-card rounded-2xl p-3 card-3d active:scale-[0.98] transition-transform disabled:opacity-80"
             >
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center text-lg shrink-0">📢</div>
+                <div className="w-11 h-11 rounded-2xl bg-accent/20 flex items-center justify-center text-lg shrink-0">📢</div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground text-sm">{task.name}</h3>
                   <p className="text-xs text-muted-foreground">{task.username}</p>
@@ -204,7 +203,7 @@ const VazifalarPage = () => {
 
       {/* Channel Task Modal */}
       <Dialog open={!!selectedTask} onOpenChange={(v) => { if (!v) setSelectedTask(null); }}>
-        <DialogContent className="max-w-[340px] rounded-2xl p-0 overflow-hidden border-none">
+        <DialogContent className="max-w-[340px] rounded-3xl p-0 overflow-hidden border-none card-3d">
           <div className="gradient-primary p-4 text-center">
             <DialogHeader>
               <DialogTitle className="text-primary-foreground text-base font-bold">📢 Kanalga obuna bo'lish</DialogTitle>
@@ -214,12 +213,12 @@ const VazifalarPage = () => {
             {selectedTask && (
               <>
                 <div className="text-center">
-                  <div className="w-16 h-16 mx-auto rounded-full bg-accent/20 flex items-center justify-center text-3xl mb-2">📢</div>
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-accent/20 flex items-center justify-center text-3xl mb-2">📢</div>
                   <h3 className="font-bold text-foreground text-sm">{selectedTask.name}</h3>
                   <p className="text-xs text-muted-foreground">{selectedTask.username}</p>
                 </div>
 
-                <div className="bg-accent/10 rounded-xl p-3 text-center">
+                <div className="bg-accent/10 rounded-2xl p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-0.5">Mukofot</p>
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-lg">🪙</span>
@@ -230,7 +229,7 @@ const VazifalarPage = () => {
                 <div className="space-y-2">
                   <button
                     onClick={() => goToChannel(selectedTask.username)}
-                    className="w-full gradient-primary text-primary-foreground font-semibold py-3 rounded-xl active:scale-[0.97] transition-transform text-sm flex items-center justify-center gap-2"
+                    className="w-full gradient-primary text-primary-foreground font-bold py-3 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2"
                   >
                     <ExternalLink size={16} />
                     Kanalga o'tish
@@ -238,7 +237,8 @@ const VazifalarPage = () => {
                   <button
                     onClick={handleCheckMembership}
                     disabled={checking}
-                    className="w-full bg-success text-white font-semibold py-3 rounded-xl active:scale-[0.97] transition-transform text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                    className="w-full bg-success text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-70"
+                    style={{ boxShadow: "0 4px 0 hsl(142 70% 35%), 0 6px 12px hsl(142 70% 35% / 0.3)" }}
                   >
                     {checking ? (
                       <><Loader2 size={16} className="animate-spin" /> Tekshirilmoqda...</>

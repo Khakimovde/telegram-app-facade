@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Play, CheckCircle2, Loader2, ExternalLink } from "lucide-react";
+import { CheckCircle2, Loader2, ExternalLink, Tv } from "lucide-react";
 
 const AD_URL = "https://crn77.com/4/10640772";
 
@@ -30,10 +30,8 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
     if (phase !== "idle") return;
     setPhase("watching");
 
-    // Open ad link in new window
     openAdLink();
 
-    // Wait 5 seconds for user to view ad
     await new Promise((r) => setTimeout(r, 5000));
 
     try {
@@ -51,7 +49,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (phase === "idle" || phase === "done") onOpenChange(v); }}>
-      <DialogContent className="max-w-[340px] rounded-2xl p-0 overflow-hidden border-none">
+      <DialogContent className="max-w-[340px] rounded-3xl p-0 overflow-hidden border-none card-3d">
         <div className="gradient-primary p-4 text-center">
           <DialogHeader>
             <DialogTitle className="text-primary-foreground text-base font-bold">📺 Reklama ko'rish</DialogTitle>
@@ -60,16 +58,16 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Progress - only for limited mode */}
           {!unlimited && (
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 mb-2">
                 {Array.from({ length: maxAds }).map((_, i) => (
                   <div
                     key={i}
-                    className={`w-6 h-1.5 rounded-full transition-all ${
-                      i < adsWatched ? "bg-primary" : "bg-muted"
+                    className={`w-6 h-2 rounded-full transition-all ${
+                      i < adsWatched ? "gradient-primary" : "bg-muted"
                     }`}
+                    style={i < adsWatched ? { boxShadow: "0 2px 4px hsl(0 78% 50% / 0.3)" } : {}}
                   />
                 ))}
               </div>
@@ -79,8 +77,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
             </div>
           )}
 
-          {/* Reward info */}
-          <div className="bg-accent/10 rounded-xl p-3 text-center">
+          <div className="bg-accent/10 rounded-2xl p-3 text-center card-3d">
             <p className="text-xs text-muted-foreground mb-0.5">Mukofot</p>
             <div className="flex items-center justify-center gap-1">
               <span className="text-lg">🪙</span>
@@ -88,7 +85,6 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
             </div>
           </div>
 
-          {/* Action area */}
           {phase === "watching" ? (
             <div className="text-center py-4">
               <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center relative">
@@ -99,7 +95,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-success/10 flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-success/10 flex items-center justify-center" style={{ boxShadow: "0 4px 12px hsl(142 70% 45% / 0.2)" }}>
                 <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
               <p className="text-sm font-semibold text-success">Muvaffaqiyatli!</p>
@@ -113,7 +109,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
           ) : (
             <button
               onClick={handleWatch}
-              className="w-full gradient-primary text-primary-foreground font-semibold py-3 rounded-xl active:scale-[0.97] transition-transform text-sm flex items-center justify-center gap-2"
+              className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2"
             >
               <ExternalLink size={18} />
               Reklama ko'rish

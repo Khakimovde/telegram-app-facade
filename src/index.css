@@ -4,22 +4,22 @@
 
 @layer base {
   :root {
-    --background: 40 33% 96%;
+    --background: 0 0% 98%;
     --foreground: 220 20% 15%;
 
-    --card: 40 30% 98%;
+    --card: 0 0% 100%;
     --card-foreground: 220 20% 15%;
 
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 15%;
 
-    --primary: 213 80% 50%;
+    --primary: 0 78% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 30% 92%;
+    --secondary: 0 10% 93%;
     --secondary-foreground: 220 20% 15%;
 
-    --muted: 40 20% 93%;
+    --muted: 0 5% 93%;
     --muted-foreground: 220 10% 50%;
 
     --accent: 43 96% 56%;
@@ -31,11 +31,11 @@
     --success: 142 70% 45%;
     --success-foreground: 0 0% 100%;
 
-    --border: 40 20% 88%;
-    --input: 40 25% 90%;
-    --ring: 213 80% 50%;
+    --border: 0 5% 90%;
+    --input: 0 5% 90%;
+    --ring: 0 78% 55%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
     --coin: 43 96% 56%;
     --coin-foreground: 30 80% 30%;
@@ -47,7 +47,7 @@
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 0 78% 55%;
   }
 }
 
@@ -64,12 +64,47 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(213 80% 55%), hsl(213 80% 45%));
+    background: linear-gradient(135deg, hsl(0 78% 58%), hsl(0 78% 48%));
   }
   .gradient-coin {
     background: linear-gradient(135deg, hsl(43 96% 60%), hsl(35 90% 50%));
   }
   .card-shadow {
-    box-shadow: 0 2px 8px hsl(220 20% 15% / 0.06);
+    box-shadow:
+      0 4px 14px hsl(0 0% 0% / 0.06),
+      0 1px 3px hsl(0 0% 0% / 0.04);
+  }
+  .card-3d {
+    box-shadow:
+      0 6px 20px hsl(0 0% 0% / 0.08),
+      0 2px 6px hsl(0 0% 0% / 0.04),
+      inset 0 1px 0 hsl(0 0% 100% / 0.6);
+    border: 1px solid hsl(0 0% 0% / 0.04);
+  }
+  .btn-3d {
+    box-shadow:
+      0 4px 0 hsl(0 78% 38%),
+      0 6px 12px hsl(0 78% 40% / 0.3);
+    transform: translateY(0);
+    transition: all 0.15s ease;
+  }
+  .btn-3d:active {
+    box-shadow:
+      0 1px 0 hsl(0 78% 38%),
+      0 2px 4px hsl(0 78% 40% / 0.2);
+    transform: translateY(3px);
+  }
+  .btn-3d-accent {
+    box-shadow:
+      0 4px 0 hsl(35 90% 40%),
+      0 6px 12px hsl(35 90% 40% / 0.3);
+    transform: translateY(0);
+    transition: all 0.15s ease;
+  }
+  .btn-3d-accent:active {
+    box-shadow:
+      0 1px 0 hsl(35 90% 40%),
+      0 2px 4px hsl(35 90% 40% / 0.2);
+    transform: translateY(3px);
   }
 }
