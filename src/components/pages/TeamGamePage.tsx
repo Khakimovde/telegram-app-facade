@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Tv, Clock, CheckCircle2 } from "lucide-react";
+import { Tv, Clock, CheckCircle2, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import AdWatchDialog from "@/components/AdWatchDialog";
@@ -20,7 +20,6 @@ const TeamGamePage = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Timer - counts down to next :00 or :30
   useEffect(() => {
     const updateTimer = () => {
       const now = new Date();
@@ -64,23 +63,24 @@ const TeamGamePage = () => {
       {/* Header */}
       <div className="text-center mb-2">
         <div className="inline-flex items-center gap-1.5 mb-0.5">
-          <Tv className="text-accent" size={22} />
+          <Gamepad2 className="text-primary" size={24} />
           <h1 className="text-lg font-bold text-foreground">O'yin</h1>
         </div>
         <p className="text-xs text-muted-foreground">Har 30 daqiqada 10 ta reklama ko'ring va tanga yuting!</p>
       </div>
 
       {/* Main card */}
-      <div className="bg-card rounded-xl p-4 card-shadow">
+      <div className="bg-card rounded-2xl p-5 card-3d">
         {/* Progress */}
         <div className="text-center mb-4">
-          <div className="flex items-center justify-center gap-1 mb-2">
+          <div className="flex items-center justify-center gap-1.5 mb-2">
             {Array.from({ length: maxAds }).map((_, i) => (
               <div
                 key={i}
-                className={`w-6 h-2 rounded-full transition-all ${
-                  i < adsWatched ? "bg-accent" : "bg-muted"
+                className={`w-7 h-2.5 rounded-full transition-all ${
+                  i < adsWatched ? "gradient-primary" : "bg-muted"
                 }`}
+                style={i < adsWatched ? { boxShadow: "0 2px 4px hsl(0 78% 50% / 0.3)" } : {}}
               />
             ))}
           </div>
@@ -88,7 +88,7 @@ const TeamGamePage = () => {
         </div>
 
         {/* Reward info */}
-        <div className="bg-accent/10 rounded-xl p-3 text-center mb-4">
+        <div className="bg-accent/10 rounded-2xl p-3 text-center mb-4 card-3d">
           <p className="text-xs text-muted-foreground mb-0.5">Mukofot (10/10 da)</p>
           <div className="flex items-center justify-center gap-1">
             <span className="text-xl">🪙</span>
@@ -98,22 +98,22 @@ const TeamGamePage = () => {
 
         {adsCompleted ? (
           <div className="text-center space-y-3">
-            <div className="w-16 h-16 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-success/10 flex items-center justify-center" style={{ boxShadow: "0 4px 12px hsl(142 70% 45% / 0.2)" }}>
               <CheckCircle2 className="w-8 h-8 text-success" />
             </div>
             <p className="text-sm font-bold text-success">Bajarildi! 🎉</p>
-            <div className="bg-muted/50 rounded-xl p-3">
+            <div className="bg-muted/50 rounded-2xl p-3">
               <div className="flex items-center justify-center gap-2">
-                <Clock size={16} className="text-destructive" />
+                <Clock size={16} className="text-primary" />
                 <span className="text-xs text-muted-foreground">Keyingi vaqt:</span>
-                <span className="text-lg font-mono font-bold text-destructive">{timeLeft}</span>
+                <span className="text-lg font-mono font-bold text-primary">{timeLeft}</span>
               </div>
             </div>
           </div>
         ) : (
           <button
             onClick={() => setAdDialogOpen(true)}
-            className="w-full gradient-primary text-primary-foreground font-semibold py-3 rounded-xl active:scale-[0.97] transition-transform text-sm flex items-center justify-center gap-2"
+            className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2"
           >
             <Tv size={18} />
             Reklama ko'rish ({adsWatched}/{maxAds})
@@ -123,17 +123,17 @@ const TeamGamePage = () => {
 
       {/* Timer always visible when not completed */}
       {!adsCompleted && (
-        <div className="bg-card rounded-xl p-3 card-shadow">
+        <div className="bg-card rounded-2xl p-3 card-3d">
           <div className="flex items-center justify-center gap-2">
-            <Clock size={14} className="text-destructive" />
+            <Clock size={14} className="text-primary" />
             <span className="text-xs text-muted-foreground">Qolgan vaqt:</span>
-            <span className="text-base font-mono font-bold text-destructive">{timeLeft}</span>
+            <span className="text-base font-mono font-bold text-primary">{timeLeft}</span>
           </div>
         </div>
       )}
 
       {/* Rules */}
-      <div className="bg-card rounded-xl p-3 card-shadow">
+      <div className="bg-card rounded-2xl p-3 card-3d">
         <h3 className="text-xs font-semibold text-foreground mb-2">📋 Qoidalar</h3>
         <ul className="space-y-1 text-[11px] text-muted-foreground">
           <li>• Har 30 daqiqada (00 va 30 daqiqalarda) yangi davr boshlanadi</li>

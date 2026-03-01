@@ -21,8 +21,8 @@ const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
   const visibleTabs = tabs.filter((t) => !("adminOnly" in t && t.adminOnly) || isAdmin);
 
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card border-t border-border z-20">
-      <div className="flex justify-around py-2">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card/95 backdrop-blur-sm border-t border-border z-20">
+      <div className="flex justify-around py-1.5">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -30,8 +30,10 @@ const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground"
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                isActive
+                  ? "text-primary bg-primary/10 scale-105"
+                  : "text-muted-foreground active:scale-95"
               }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
