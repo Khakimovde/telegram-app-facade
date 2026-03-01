@@ -355,7 +355,8 @@ const AdminPage = () => {
                     <span className="text-[10px] text-muted-foreground">{dateStr}</span>
                   </div>
                   <div className="bg-muted rounded-lg p-2 mb-1.5">
-                    <p className="text-[10px] text-muted-foreground">ID: {req.user_id}</p>
+                    <p className="text-xs font-semibold text-foreground">{req.user_name || "Noma'lum"}</p>
+                    <p className="text-[10px] text-muted-foreground">{req.user_username || ""} · ID: {req.user_id}</p>
                   </div>
                   <p className="text-xs text-foreground mb-0.5">
                     <strong>{req.tanga.toLocaleString()} tanga</strong> → <span className="text-success font-bold">{req.som.toLocaleString()} so'm</span>

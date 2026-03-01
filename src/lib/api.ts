@@ -29,6 +29,8 @@ export interface DbWithdrawRequest {
   status: string;
   reason: string | null;
   created_at: string;
+  user_name?: string;
+  user_username?: string;
 }
 
 export interface DbChannelTask {
@@ -218,7 +220,28 @@ export async function fetchAllWithdrawRequests(): Promise<DbWithdrawRequest[]> {
     .from("withdraw_requests")
     .select("*")
     .order("created_at", { ascending: false });
-  return (data || []) as DbWithdrawRequest[];
+  
+  const requests = (data || []) as DbWithdrawRequest[];
+  
+  // Fetch user info for each request
+  const userIds = [...new Set(requests.map(r => r.user_id))];
+  if (userIds.length > 0) {
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, name, username")
+      .in("id", userIds);
+    
+    const userMap = new Map((users || []).map(u => [u.id, u]));
+    for (const req of requests) {
+      const u = userMap.get(req.user_id);
+      if (u) {
+        req.user_name = u.name;
+        req.user_username = u.username;
+      }
+    }
+  }
+  
+  return requests;
 }
 
 export async function fetchAuctionResults(userId: string): Promise<DbAuctionResult[]> {

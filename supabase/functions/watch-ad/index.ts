@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     }
 
     if (type === "oyin") {
-      // 30-minute slots, 10 ads max, 20 tanga reward
+      // 30-minute slots, 10 ads max, 30 tanga reward
       const slotKey = getOyinSlotKey();
       const maxAds = 10;
 
@@ -158,10 +158,10 @@ Deno.serve(async (req) => {
 
       const newCount = currentCount + 1;
 
-      // Give 20 tanga when 10/10 is complete
+      // Give 30 tanga when 10/10 is complete
       if (newCount >= maxAds) {
-        earnedAmount = 20;
-        await supabase.rpc("add_balance", { p_user_id: userId, p_amount: 20 });
+        earnedAmount = 30;
+        await supabase.rpc("add_balance", { p_user_id: userId, p_amount: 30 });
       }
 
       // Update ads_watched_total

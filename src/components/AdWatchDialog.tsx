@@ -32,8 +32,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
 
     openAdLink();
 
-    await new Promise((r) => setTimeout(r, 5000));
-
+    // Immediately credit - no wait needed
     try {
       await onWatch();
       setPhase("done");
@@ -90,8 +89,8 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
               <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center relative">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
               </div>
-              <p className="text-sm font-semibold text-foreground">Reklama tekshirilmoqda...</p>
-              <p className="text-xs text-muted-foreground mt-1">Iltimos, kutib turing</p>
+              <p className="text-sm font-semibold text-foreground">Hisoblanmoqda...</p>
+              <p className="text-xs text-muted-foreground mt-1">Biroz kuting</p>
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
