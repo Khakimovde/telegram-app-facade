@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Tv, Clock, CheckCircle2, Gamepad2 } from "lucide-react";
+import { Tv, Clock, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import AdWatchDialog from "@/components/AdWatchDialog";
@@ -63,8 +63,8 @@ const TeamGamePage = () => {
       {/* Header */}
       <div className="text-center mb-2">
         <div className="inline-flex items-center gap-1.5 mb-0.5">
-          <Gamepad2 className="text-primary" size={24} />
-          <h1 className="text-lg font-bold text-foreground">O'yin</h1>
+          <Tv className="text-primary" size={24} />
+          <h1 className="text-lg font-bold text-foreground">Reklama</h1>
         </div>
         <p className="text-xs text-muted-foreground">Har 30 daqiqada 10 ta reklama ko'ring va tanga yuting!</p>
       </div>
@@ -92,7 +92,7 @@ const TeamGamePage = () => {
           <p className="text-xs text-muted-foreground mb-0.5">Mukofot (10/10 da)</p>
           <div className="flex items-center justify-center gap-1">
             <span className="text-xl">🪙</span>
-            <span className="text-xl font-bold text-accent-foreground">20 Tanga</span>
+            <span className="text-xl font-bold text-accent-foreground">30 Tanga</span>
           </div>
         </div>
 
@@ -138,7 +138,7 @@ const TeamGamePage = () => {
         <ul className="space-y-1 text-[11px] text-muted-foreground">
           <li>• Har 30 daqiqada (00 va 30 daqiqalarda) yangi davr boshlanadi</li>
           <li>• Har davrda 10 ta reklama ko'ring</li>
-          <li>• 10/10 bo'lganda 20 tanga beriladi</li>
+          <li>• 10/10 bo'lganda 30 tanga beriladi</li>
           <li>• Keyingi davrni kutib, yana davom eting</li>
         </ul>
       </div>
@@ -149,7 +149,7 @@ const TeamGamePage = () => {
         onWatch={handleWatchAd}
         adsWatched={adsWatched}
         maxAds={maxAds}
-        reward="20 Tanga (10/10 da)"
+        reward="30 Tanga (10/10 da)"
       />
     </div>
   );

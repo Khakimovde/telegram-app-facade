@@ -1,4 +1,4 @@
-import { ListChecks, Trophy, Users, Swords, User, Settings } from "lucide-react";
+import { ListChecks, Trophy, Users, Tv, User, Settings } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 
 interface BottomNavProps {
@@ -8,7 +8,7 @@ interface BottomNavProps {
 
 const tabs = [
   { id: "vazifalar", label: "Vazifalar", icon: ListChecks },
-  { id: "oyin", label: "O'yin", icon: Swords },
+  { id: "oyin", label: "Reklama", icon: Tv },
   { id: "referal", label: "Referal", icon: Users },
   { id: "top", label: "Top", icon: Trophy },
   { id: "profil", label: "Profil", icon: User },
