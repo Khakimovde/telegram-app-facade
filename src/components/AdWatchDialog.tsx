@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CheckCircle2, Loader2, ExternalLink } from "lucide-react";
 
@@ -15,8 +15,8 @@ interface AdWatchDialogProps {
 }
 
 const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false }: AdWatchDialogProps) => {
-  const [phase, setPhase] = useState<"idle" | "waiting" | "spinning" | "done">("idle");
-  const clickTimeRef = useRef<number>(0);
+  const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openAdLink = () => {
     if (window.Telegram?.WebApp) {
@@ -29,23 +29,13 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
   const handleWatch = useCallback(async () => {
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
-    
-    clickTimeRef.current = Date.now();
-    setPhase("waiting");
-    openAdLink();
-  }, [adsWatched, maxAds, phase, unlimited]);
 
-  // When user returns and dialog becomes visible again, start the 5s spinner
-  const handleFocus = useCallback(() => {
-    if (phase !== "waiting") return;
-    
-    const elapsed = Date.now() - clickTimeRef.current;
-    if (elapsed < 2000) {
-      // Returned too fast - still start spinner but from beginning
-    }
-    
+    // Open ad link
+    openAdLink();
+
+    // Immediately start 7s spinner
     setPhase("spinning");
-    setTimeout(async () => {
+    timerRef.current = setTimeout(async () => {
       try {
         await onWatch();
         setPhase("done");
@@ -53,21 +43,8 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
       } catch {
         setPhase("idle");
       }
-    }, 5000);
-  }, [phase, onWatch]);
-
-  // Listen for visibility/focus changes
-  useEffect(() => {
-    const onVisibility = () => {
-      if (!document.hidden) handleFocus();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [handleFocus]);
+    }, 7000);
+  }, [adsWatched, maxAds, phase, unlimited, onWatch]);
 
   const completed = !unlimited && adsWatched >= maxAds;
 
@@ -109,20 +86,16 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
             </div>
           </div>
 
-          {phase === "waiting" ? (
-            <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
-                <ExternalLink className="w-8 h-8 text-primary" />
-              </div>
-              <p className="text-sm font-semibold text-foreground">Reklamani ko'ring</p>
-              <p className="text-xs text-muted-foreground mt-1">Ko'rib bo'lgach qaytib keling</p>
-            </div>
-          ) : phase === "spinning" ? (
-            <div className="text-center py-4">
-              <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center relative">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-              </div>
-              <p className="text-sm font-semibold text-foreground">Hisoblanmoqda...</p>
+          {phase === "spinning" ? (
+            <div className="space-y-3">
+              <button
+                disabled
+                className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2 opacity-90"
+              >
+                <Loader2 size={18} className="animate-spin" />
+                Hisoblanmoqda...
+              </button>
+              <p className="text-xs text-center text-muted-foreground">⏳ Kamida 5 soniya koring</p>
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
