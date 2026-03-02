@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     const username = message.from.username ? `@${message.from.username}` : "";
     const photoUrl = ""; // Not available from message, will be updated by telegram-auth
 
-    const MINI_APP_URL = "https://691c729b6ca6a.xvest3.ru";
+    const MINI_APP_URL = "https://c1621.coresuz.ru";
     const SUPPORT_BOT = "https://t.me/velsupport_bot";
 
     if (text.startsWith("/start")) {
