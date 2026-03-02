@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, ExternalLink, Tv } from "lucide-react";
+import { CheckCircle2, Loader2, ExternalLink } from "lucide-react";
 
 const AD_URL = "https://crn77.com/4/10640772";
 
@@ -15,7 +15,8 @@ interface AdWatchDialogProps {
 }
 
 const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false }: AdWatchDialogProps) => {
-  const [phase, setPhase] = useState<"idle" | "watching" | "done">("idle");
+  const [phase, setPhase] = useState<"idle" | "waiting" | "spinning" | "done">("idle");
+  const clickTimeRef = useRef<number>(0);
 
   const openAdLink = () => {
     if (window.Telegram?.WebApp) {
@@ -28,21 +29,45 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
   const handleWatch = useCallback(async () => {
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
-    setPhase("watching");
-
+    
+    clickTimeRef.current = Date.now();
+    setPhase("waiting");
     openAdLink();
+  }, [adsWatched, maxAds, phase, unlimited]);
 
-    // Immediately credit - no wait needed
-    try {
-      await onWatch();
-      setPhase("done");
-      setTimeout(() => {
-        setPhase("idle");
-      }, 1200);
-    } catch {
-      setPhase("idle");
+  // When user returns and dialog becomes visible again, start the 5s spinner
+  const handleFocus = useCallback(() => {
+    if (phase !== "waiting") return;
+    
+    const elapsed = Date.now() - clickTimeRef.current;
+    if (elapsed < 2000) {
+      // Returned too fast - still start spinner but from beginning
     }
-  }, [adsWatched, maxAds, phase, onWatch, unlimited]);
+    
+    setPhase("spinning");
+    setTimeout(async () => {
+      try {
+        await onWatch();
+        setPhase("done");
+        setTimeout(() => setPhase("idle"), 1200);
+      } catch {
+        setPhase("idle");
+      }
+    }, 5000);
+  }, [phase, onWatch]);
+
+  // Listen for visibility/focus changes
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!document.hidden) handleFocus();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [handleFocus]);
 
   const completed = !unlimited && adsWatched >= maxAds;
 
@@ -84,13 +109,20 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
             </div>
           </div>
 
-          {phase === "watching" ? (
+          {phase === "waiting" ? (
+            <div className="text-center py-4">
+              <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
+                <ExternalLink className="w-8 h-8 text-primary" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">Reklamani ko'ring</p>
+              <p className="text-xs text-muted-foreground mt-1">Ko'rib bo'lgach qaytib keling</p>
+            </div>
+          ) : phase === "spinning" ? (
             <div className="text-center py-4">
               <div className="w-20 h-20 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center relative">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
               </div>
               <p className="text-sm font-semibold text-foreground">Hisoblanmoqda...</p>
-              <p className="text-xs text-muted-foreground mt-1">Biroz kuting</p>
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
