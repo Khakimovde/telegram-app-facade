@@ -203,6 +203,28 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (type === "bonus") {
+      // Bonus Day: unlimited ads, +2 bonus_balance each
+      await supabase.from("ad_watch_log").insert({
+        user_id: userId,
+        type,
+        slot_key: `bonus-${now.toISOString().split("T")[0]}`,
+      });
+
+      const { data: bonusUser } = await supabase.from("users").select("bonus_balance, ads_watched_total").eq("id", userId).single();
+      if (bonusUser) {
+        await supabase.from("users").update({
+          bonus_balance: (bonusUser.bonus_balance || 0) + 2,
+          ads_watched_total: bonusUser.ads_watched_total + 1,
+        }).eq("id", userId);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, bonus: 2 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     throw new Error("Invalid type");
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {

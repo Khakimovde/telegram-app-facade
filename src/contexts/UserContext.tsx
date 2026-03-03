@@ -5,6 +5,7 @@ import {
   fetchCurrentUser,
   getTelegramUser,
   getUserLevel,
+  fetchBonusDayActive,
 } from "@/lib/api";
 
 interface UserContextType {
@@ -12,7 +13,9 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
+  bonusDayActive: boolean;
   refreshUser: () => Promise<void>;
+  refreshBonusDay: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType>({
@@ -20,7 +23,9 @@ const UserContext = createContext<UserContextType>({
   loading: true,
   error: null,
   isAdmin: false,
+  bonusDayActive: false,
   refreshUser: async () => {},
+  refreshBonusDay: async () => {},
 });
 
 export function useUser() {
@@ -34,12 +39,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<DbUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bonusDayActive, setBonusDayActive] = useState(false);
 
   const refreshUser = useCallback(async () => {
     const userId = user?.id || DEV_USER_ID;
     const freshUser = await fetchCurrentUser(userId);
     if (freshUser) setUser(freshUser);
   }, [user?.id]);
+
+  const refreshBonusDay = useCallback(async () => {
+    const active = await fetchBonusDayActive();
+    setBonusDayActive(active);
+  }, []);
 
   // Auto-refresh balance every 5 seconds
   useEffect(() => {
@@ -54,6 +65,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const init = async () => {
       try {
+        // Fetch bonus day setting
+        fetchBonusDayActive().then(setBonusDayActive).catch(() => {});
+
         const tg = getTelegramUser();
 
         if (tg?.initData && tg.user) {
@@ -62,7 +76,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             ? tg.startParam.replace("ref_", "")
             : undefined;
 
-          // Try auth with race timeout (12s max)
           let dbUser: DbUser | null = null;
           try {
             dbUser = await Promise.race([
@@ -73,7 +86,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             ]);
           } catch (authErr) {
             console.warn("Auth edge call failed, trying direct fetch:", authErr);
-            // Fallback: user might already exist from webhook
             dbUser = await fetchCurrentUser(telegramId);
           }
 
@@ -112,7 +124,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         isAdmin: user?.is_admin || false,
+        bonusDayActive,
         refreshUser,
+        refreshBonusDay,
       }}
     >
       {children}

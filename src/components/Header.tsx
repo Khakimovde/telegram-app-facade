@@ -38,9 +38,17 @@ const Header = () => {
           <p className="text-[10px] text-muted-foreground">ID: {user.id}</p>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 gradient-coin text-white rounded-2xl px-3 py-1.5 btn-3d-accent">
-        <span className="text-sm">🪙</span>
-        <span className="font-bold text-sm drop-shadow-sm">{user.balance.toLocaleString()}</span>
+      <div className="flex items-center gap-1.5">
+        {/* Bonus balance - always visible */}
+        <div className="flex items-center gap-1 bg-accent/20 text-accent-foreground rounded-2xl px-2.5 py-1.5">
+          <span className="text-sm">🎁</span>
+          <span className="font-bold text-xs">{(user.bonus_balance || 0).toLocaleString()}</span>
+        </div>
+        {/* Main balance */}
+        <div className="flex items-center gap-1 gradient-coin text-white rounded-2xl px-3 py-1.5 btn-3d-accent">
+          <span className="text-sm">🪙</span>
+          <span className="font-bold text-sm drop-shadow-sm">{user.balance.toLocaleString()}</span>
+        </div>
       </div>
     </div>
   );

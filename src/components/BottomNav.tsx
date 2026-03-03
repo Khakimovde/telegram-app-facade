@@ -1,4 +1,4 @@
-import { ListChecks, Trophy, Users, Tv, User, Settings } from "lucide-react";
+import { ListChecks, Gift, Trophy, Users, Tv, User, Settings } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 
 interface BottomNavProps {
@@ -6,24 +6,23 @@ interface BottomNavProps {
   onTabChange: (tab: string) => void;
 }
 
-const tabs = [
-  { id: "vazifalar", label: "Vazifalar", icon: ListChecks },
-  { id: "oyin", label: "Reklama", icon: Tv },
-  { id: "referal", label: "Referal", icon: Users },
-  { id: "top", label: "Top", icon: Trophy },
-  { id: "profil", label: "Profil", icon: User },
-  { id: "admin", label: "Admin", icon: Settings, adminOnly: true },
-];
-
 const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
-  const { isAdmin } = useUser();
+  const { isAdmin, bonusDayActive } = useUser();
 
-  const visibleTabs = tabs.filter((t) => !("adminOnly" in t && t.adminOnly) || isAdmin);
+  const tabs = [
+    { id: "vazifalar", label: "Vazifalar", icon: ListChecks },
+    ...(bonusDayActive ? [{ id: "bonus", label: "Bonus", icon: Gift }] : []),
+    { id: "oyin", label: "Reklama", icon: Tv },
+    { id: "referal", label: "Referal", icon: Users },
+    { id: "top", label: "Top", icon: Trophy },
+    { id: "profil", label: "Profil", icon: User },
+    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: Settings }] : []),
+  ];
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-card/95 backdrop-blur-sm border-t border-border z-20">
       <div className="flex justify-around py-1.5">
-        {visibleTabs.map((tab) => {
+        {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

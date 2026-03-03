@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus } from "lucide-react";
+import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus, Gift, ToggleLeft, ToggleRight, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ const adminTabs = [
   { id: "foydalanuvchi", label: "Foydalanuvchi", icon: Users },
   { id: "sorovlar", label: "So'rovlar", icon: FileText },
   { id: "kanal", label: "Kanal", icon: Hash },
+  { id: "bonus", label: "Bonus", icon: Gift },
 ];
 
 const statusConfig = {
@@ -29,16 +30,19 @@ const statusConfig = {
 };
 
 const AdminPage = () => {
-  const { user, isAdmin } = useUser();
+  const { user, isAdmin, bonusDayActive, refreshBonusDay } = useUser();
   const [activeTab, setActiveTab] = useState("statistika");
   const [searchId, setSearchId] = useState("");
   const [foundUser, setFoundUser] = useState<DbUser | null>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
+  const [bonusConvertAmount, setBonusConvertAmount] = useState("");
   const [channelName, setChannelName] = useState("");
   const [channelUsername, setChannelUsername] = useState("");
   const [channelReward, setChannelReward] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [bonusSearchId, setBonusSearchId] = useState("");
+  const [bonusFoundUser, setBonusFoundUser] = useState<DbUser | null>(null);
   const [stats, setStats] = useState<{
     totalUsers: number;
     pendingRequests: number;
@@ -497,6 +501,131 @@ const AdminPage = () => {
             <button onClick={addChannel} className="w-full gradient-primary text-primary-foreground font-semibold py-2.5 rounded-lg active:scale-[0.98] transition-transform text-sm">
               ➕ Kanal qo'shish
             </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "bonus" && (
+        <div>
+          <h2 className="font-semibold text-foreground text-sm mb-3">🎁 Bonus Day boshqaruvi</h2>
+
+          {/* Toggle */}
+          <div className="bg-card rounded-lg p-3 card-shadow mb-3 flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-foreground text-sm">Bonus Day</p>
+              <p className="text-[10px] text-muted-foreground">{bonusDayActive ? "Yoqilgan ✅" : "O'chirilgan ❌"}</p>
+            </div>
+            <button
+              onClick={async () => {
+                if (!user) return;
+                try {
+                  await adminAction(user.id, "toggle_bonus_day", { enabled: !bonusDayActive });
+                  await refreshBonusDay();
+                  toast.success(bonusDayActive ? "❌ Bonus Day o'chirildi" : "✅ Bonus Day yoqildi");
+                } catch {
+                  toast.error("Xatolik");
+                }
+              }}
+              className={`p-2 rounded-lg transition-colors ${bonusDayActive ? "bg-success/10" : "bg-muted"}`}
+            >
+              {bonusDayActive ? <ToggleRight size={28} className="text-success" /> : <ToggleLeft size={28} className="text-muted-foreground" />}
+            </button>
+          </div>
+
+          {/* Convert bonus to main balance */}
+          <div className="bg-card rounded-lg p-3 card-shadow space-y-2">
+            <h3 className="font-semibold text-foreground text-xs flex items-center gap-1">
+              <ArrowRightLeft size={14} /> Bonus → Asosiy tangaga o'tkazish
+            </h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={bonusSearchId}
+                onChange={(e) => setBonusSearchId(e.target.value)}
+                placeholder="Telegram ID"
+                className="flex-1 bg-input rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                onKeyDown={(e) => e.key === "Enter" && (async () => {
+                  if (!bonusSearchId.trim() || !user) return;
+                  try {
+                    const res = await adminAction(user.id, "find_user", { targetUserId: bonusSearchId.trim() });
+                    if (res.result) {
+                      setBonusFoundUser(res.result);
+                      toast.success(`✅ ${res.result.name} topildi!`);
+                    } else {
+                      setBonusFoundUser(null);
+                      toast.error("Topilmadi!");
+                    }
+                  } catch { toast.error("Xatolik"); }
+                })()}
+              />
+              <button
+                onClick={async () => {
+                  if (!bonusSearchId.trim() || !user) return;
+                  try {
+                    const res = await adminAction(user.id, "find_user", { targetUserId: bonusSearchId.trim() });
+                    if (res.result) {
+                      setBonusFoundUser(res.result);
+                      toast.success(`✅ ${res.result.name} topildi!`);
+                    } else {
+                      setBonusFoundUser(null);
+                      toast.error("Topilmadi!");
+                    }
+                  } catch { toast.error("Xatolik"); }
+                }}
+                className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center active:scale-95 transition-transform"
+              >
+                <Search className="text-primary-foreground" size={16} />
+              </button>
+            </div>
+
+            {bonusFoundUser && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-foreground text-sm">{bonusFoundUser.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{bonusFoundUser.username} · ID: {bonusFoundUser.id}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-card rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground">Bonus tanga</p>
+                    <p className="font-bold text-accent-foreground text-sm">🎁 {(bonusFoundUser.bonus_balance || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-card rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground">Asosiy tanga</p>
+                    <p className="font-bold text-primary text-sm">🪙 {bonusFoundUser.balance.toLocaleString()}</p>
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  value={bonusConvertAmount}
+                  onChange={(e) => setBonusConvertAmount(e.target.value)}
+                  placeholder="O'tkazish miqdori"
+                  className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  onClick={async () => {
+                    if (!bonusConvertAmount || !bonusFoundUser || !user) return;
+                    const amt = parseInt(bonusConvertAmount);
+                    if (amt <= 0) { toast.error("Miqdor musbat bo'lishi kerak"); return; }
+                    if (amt > (bonusFoundUser.bonus_balance || 0)) { toast.error("Bonus tanga yetarli emas!"); return; }
+                    try {
+                      await adminAction(user.id, "convert_bonus", { targetUserId: bonusFoundUser.id, amount: amt });
+                      toast.success(`✅ ${amt} bonus tanga → asosiy tangaga o'tkazildi!`);
+                      setBonusConvertAmount("");
+                      // Refresh user data
+                      const res = await adminAction(user.id, "find_user", { targetUserId: bonusFoundUser.id });
+                      if (res.result) setBonusFoundUser(res.result);
+                    } catch (e: any) {
+                      toast.error(e.message || "Xatolik");
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-1 gradient-primary text-primary-foreground font-semibold py-2.5 rounded-lg active:scale-[0.98] transition-transform text-sm"
+                >
+                  <ArrowRightLeft size={14} /> O'tkazish
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
