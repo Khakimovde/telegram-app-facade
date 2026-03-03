@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { UserProvider } from "@/contexts/UserContext";
-import AdsgramInterstitial from "@/components/AdsgramInterstitial";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -16,7 +15,6 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <AdsgramInterstitial />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />

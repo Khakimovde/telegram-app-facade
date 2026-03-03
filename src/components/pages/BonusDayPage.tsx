@@ -72,14 +72,14 @@ const BonusDayPage = () => {
         )}
       </div>
 
-      {/* Rules */}
+      {/* Motivation */}
       <div className="bg-card rounded-2xl p-3 card-3d">
-        <h3 className="text-xs font-semibold text-foreground mb-2">📋 Qoidalar</h3>
+        <h3 className="text-xs font-semibold text-foreground mb-2">💪 Ko'proq ishlang!</h3>
         <ul className="space-y-1 text-[11px] text-muted-foreground">
           <li>• Har bir reklama uchun 2 bonus tanga beriladi</li>
           <li>• Cheksiz reklama ko'rishingiz mumkin</li>
-          <li>• Bonus tanga asosiy balansga aloqasi yo'q</li>
-          <li>• Admin bonus tangani asosiy tangaga o'zgartirishi mumkin</li>
+          <li>• Qancha ko'p ko'rsangiz, shuncha ko'p yig'asiz</li>
+          <li>• Bonus tangalaringizdan unumli foydalaning! 🚀</li>
         </ul>
       </div>
 
