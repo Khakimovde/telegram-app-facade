@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import VazifalarPage from "@/components/pages/VazifalarPage";
 import TeamGamePage from "@/components/pages/TeamGamePage";
+import BonusDayPage from "@/components/pages/BonusDayPage";
 import ReferalPage from "@/components/pages/ReferalPage";
 import TopPage from "@/components/pages/TopPage";
 import ProfilPage from "@/components/pages/ProfilPage";
@@ -112,6 +113,7 @@ const Index = () => {
     }
     switch (activeTab) {
       case "vazifalar": return <VazifalarPage />;
+      case "bonus": return <BonusDayPage />;
       case "oyin": return <TeamGamePage />;
       case "referal": return <ReferalPage />;
       case "top": return <TopPage />;

@@ -46,6 +46,24 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       auction_entries: {
         Row: {
           created_at: string
@@ -255,6 +273,7 @@ export type Database = {
           ads_watched_total: number
           auction_wins: number
           balance: number
+          bonus_balance: number
           created_at: string
           id: string
           is_admin: boolean
@@ -271,6 +290,7 @@ export type Database = {
           ads_watched_total?: number
           auction_wins?: number
           balance?: number
+          bonus_balance?: number
           created_at?: string
           id: string
           is_admin?: boolean
@@ -287,6 +307,7 @@ export type Database = {
           ads_watched_total?: number
           auction_wins?: number
           balance?: number
+          bonus_balance?: number
           created_at?: string
           id?: string
           is_admin?: boolean

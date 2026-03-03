@@ -164,6 +164,40 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "toggle_bonus_day": {
+        const { enabled } = body;
+        const { error } = await supabase
+          .from("app_settings")
+          .upsert({ key: "bonus_day_active", value: enabled ? "true" : "false", updated_at: new Date().toISOString() });
+        if (error) throw error;
+        result = { bonus_day_active: enabled };
+        break;
+      }
+
+      case "convert_bonus": {
+        const { targetUserId, amount } = body;
+        const { data: u } = await supabase
+          .from("users")
+          .select("bonus_balance, balance")
+          .eq("id", targetUserId)
+          .single();
+        if (!u) throw new Error("User not found");
+        if ((u.bonus_balance || 0) < amount) throw new Error("Insufficient bonus balance");
+
+        const { data, error } = await supabase
+          .from("users")
+          .update({
+            bonus_balance: u.bonus_balance - amount,
+            balance: u.balance + amount,
+          })
+          .eq("id", targetUserId)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }

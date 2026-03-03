@@ -8,6 +8,7 @@ export interface DbUser {
   name: string;
   username: string;
   balance: number;
+  bonus_balance: number;
   referral_count: number;
   referral_earnings: number;
   referred_by: string | null;
@@ -338,6 +339,21 @@ export async function getLastAuctionWinner(): Promise<(DbAuctionResult & { user?
 // ---- Admin Functions ----
 export async function adminAction(adminId: string, action: string, extra: Record<string, unknown> = {}) {
   return callEdge("admin-actions", { adminId, action, ...extra });
+}
+
+// ---- App Settings ----
+export async function fetchBonusDayActive(): Promise<boolean> {
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "bonus_day_active")
+    .single();
+  return data?.value === "true";
+}
+
+// ---- Bonus Ad Watch ----
+export async function watchBonusAd(userId: string) {
+  return callEdge("watch-ad", { userId, type: "bonus" });
 }
 
 // ---- Team Game Functions ----
