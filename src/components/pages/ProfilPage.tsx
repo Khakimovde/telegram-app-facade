@@ -18,7 +18,6 @@ const ProfilPage = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [history, setHistory] = useState<DbWithdrawRequest[]>([]);
 
-  // Get Telegram photo URL
   const tgUser = getTelegramUser()?.user;
   const photoUrl = tgUser?.photo_url;
 
@@ -35,7 +34,15 @@ const ProfilPage = () => {
   const withdraw = async () => {
     const amount = parseInt(tangaAmount);
     if (!amount || amount < 10000) { toast.error("Minimal 10 000 tanga kiriting!"); return; }
-    if (user.balance < amount) { toast.error("Balans yetarli emas!"); return; }
+    if (user.balance < amount) { toast.error("Asosiy balans yetarli emas!"); return; }
+    
+    // Check bonus balance requirement
+    const requiredBonus = Math.floor(amount / 2);
+    if ((user.bonus_balance || 0) < requiredBonus) {
+      toast.error(`Bonus tanga yetarli emas! ${amount.toLocaleString()} tanga yechish uchun ${requiredBonus.toLocaleString()} bonus tanga kerak. Sizda: ${(user.bonus_balance || 0).toLocaleString()} bonus tanga.`);
+      return;
+    }
+
     const cleanCard = cardNumber.replace(/\s/g, "");
     if (cleanCard.length !== 16) { toast.error("16 xonali karta raqamini kiriting!"); return; }
     setIsProcessing(true);
@@ -53,6 +60,8 @@ const ProfilPage = () => {
       toast.error(err instanceof Error ? err.message : "Xatolik yuz berdi!");
     } finally { setIsProcessing(false); }
   };
+
+  const requiredBonusPreview = tangaAmount ? Math.floor(parseInt(tangaAmount) / 2) : 0;
 
   return (
     <div className="py-3 space-y-3">
@@ -129,6 +138,15 @@ const ProfilPage = () => {
           </div>
         </div>
         <input type="number" value={tangaAmount} onChange={(e) => setTangaAmount(e.target.value)} placeholder="Tanga miqdori (min: 10 000)" className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 mb-2" disabled={isProcessing} />
+        
+        {/* Bonus requirement info */}
+        {tangaAmount && parseInt(tangaAmount) >= 10000 && (
+          <div className={`rounded-lg p-2 mb-2 text-[11px] ${(user.bonus_balance || 0) >= requiredBonusPreview ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
+            <p>🎁 Kerakli bonus tanga: <strong>{requiredBonusPreview.toLocaleString()}</strong></p>
+            <p>Sizda: <strong>{(user.bonus_balance || 0).toLocaleString()}</strong> bonus tanga {(user.bonus_balance || 0) >= requiredBonusPreview ? "✅" : "❌"}</p>
+          </div>
+        )}
+
         <input type="text" inputMode="numeric" value={cardNumber} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0, 16); setCardNumber(v); }} placeholder="Karta raqami (16 ta raqam)" className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 mb-1.5" disabled={isProcessing} maxLength={16} />
         <p className="text-[10px] text-muted-foreground mb-2">💳 Uzcard va Humo kartalari qabul qilinadi</p>
         <button onClick={withdraw} disabled={isProcessing} className="w-full gradient-primary text-primary-foreground font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform text-sm disabled:opacity-70">

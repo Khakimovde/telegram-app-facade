@@ -26,7 +26,6 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Handle GET for webhook setup
   if (req.method === "GET") {
     const botToken = Deno.env.get("BOT_TOKEN");
     if (!botToken) {
@@ -63,7 +62,6 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
 
-    // Handle webhook setup action
     if (body.action === "set_webhook") {
       const webhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-webhook`;
       const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
@@ -90,10 +88,84 @@ Deno.serve(async (req) => {
     const firstName = message.from.first_name || "";
     const lastName = message.from.last_name || "";
     const username = message.from.username ? `@${message.from.username}` : "";
-    const photoUrl = ""; // Not available from message, will be updated by telegram-auth
+    const photoUrl = "";
 
     const MINI_APP_URL = "https://c1621.coresuz.ru";
     const SUPPORT_BOT = "https://t.me/velsupport_bot";
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Check if sender is admin
+    const adminIds = (Deno.env.get("ADMIN_IDS") || "").split(",").map((s: string) => s.trim());
+    const isAdminUser = adminIds.includes(userId);
+
+    // Handle /bonusday command (admin only)
+    if (text === "/bonusday" && isAdminUser) {
+      const { data: bonusLogs } = await supabase
+        .from("ad_watch_log")
+        .select("user_id")
+        .eq("type", "bonus");
+
+      if (!bonusLogs || bonusLogs.length === 0) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: "📊 *Bonus Day*\n\nHali hech kim bonus reklama ko'rmagan.",
+            parse_mode: "Markdown",
+          }),
+        });
+        return new Response("OK", { headers: corsHeaders });
+      }
+
+      // Count per user
+      const countMap: Record<string, number> = {};
+      for (const log of bonusLogs) {
+        countMap[log.user_id] = (countMap[log.user_id] || 0) + 1;
+      }
+
+      const userIds = Object.keys(countMap);
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, name, username, bonus_balance")
+        .in("id", userIds);
+
+      const workers = (users || []).map(u => ({
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        bonus_balance: u.bonus_balance || 0,
+        ads_watched: countMap[u.id] || 0,
+      })).sort((a, b) => b.ads_watched - a.ads_watched);
+
+      let msgText = `📊 *Bonus Day ishlovchilar*\n\nJami: *${workers.length}* ta foydalanuvchi\n\n`;
+      
+      for (const w of workers.slice(0, 50)) {
+        msgText += `👤 *${w.name}*\n`;
+        msgText += `   ${w.username} · ID: \`${w.id}\`\n`;
+        msgText += `   📺 Ko'rilgan: *${w.ads_watched}* | 🎁 Balans: *${w.bonus_balance}*\n\n`;
+      }
+
+      if (workers.length > 50) {
+        msgText += `\n... va yana ${workers.length - 50} ta`;
+      }
+
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: "Markdown",
+        }),
+      });
+
+      return new Response("OK", { headers: corsHeaders });
+    }
 
     if (text.startsWith("/start")) {
       const params = text.split(" ");
@@ -103,11 +175,6 @@ Deno.serve(async (req) => {
         referrerId = params[1].replace("ref_", "");
       }
 
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-
       // Check if user already exists
       const { data: existingUser } = await supabase
         .from("users")
@@ -115,7 +182,6 @@ Deno.serve(async (req) => {
         .eq("id", userId)
         .single();
 
-      // Helper function to process referral
       const processReferral = async (newUserId: string, refId: string) => {
         const { data: referrer } = await supabase
           .from("users")
@@ -125,26 +191,21 @@ Deno.serve(async (req) => {
 
         if (!referrer) return;
 
-        // Set referred_by on the new user
         await supabase
           .from("users")
           .update({ referred_by: refId })
           .eq("id", newUserId);
 
-        // Increment referral count
         await supabase.rpc("increment_referral", { referrer_id: refId });
 
-        // Calculate new level
         const newCount = referrer.referral_count + 1;
         const newLvl = getUserLevel(newCount);
 
-        // Update referrer's level
         await supabase
           .from("users")
           .update({ level: newLvl.level })
           .eq("id", refId);
 
-        // Notify referrer
         const notifText = `🎉 *Yangi referal!*\n\n` +
           `👤 *${firstName}* sizning referalingiz bo'ldi!\n\n` +
           `📊 Jami referallaringiz: *${newCount}*\n` +
@@ -166,7 +227,6 @@ Deno.serve(async (req) => {
       };
 
       if (!existingUser) {
-        // ===== NEW USER: Create in DB =====
         const fullName = [firstName, lastName].filter(Boolean).join(" ");
         const insertData: Record<string, unknown> = {
           id: userId,
@@ -175,7 +235,6 @@ Deno.serve(async (req) => {
           photo_url: photoUrl,
         };
 
-        // Create the user first
         const { error: insertError } = await supabase
           .from("users")
           .insert(insertData);
@@ -183,23 +242,18 @@ Deno.serve(async (req) => {
         if (insertError) {
           console.error("Failed to create user in webhook:", insertError);
         } else {
-          // Process referral after user is created
           if (referrerId && referrerId !== userId) {
             await processReferral(userId, referrerId);
           }
         }
       } else if (existingUser && !existingUser.referred_by && referrerId && referrerId !== userId) {
-        // Existing user without referral - process referral now
         console.log(`Processing referral for existing user ${userId} -> ${referrerId}`);
         await processReferral(userId, referrerId);
       }
 
       // Check & update admin status
-      const adminIds = (Deno.env.get("ADMIN_IDS") || "").split(",").map((s: string) => s.trim());
-      const isAdmin = adminIds.includes(userId);
-      await supabase.from("users").update({ is_admin: isAdmin }).eq("id", userId);
+      await supabase.from("users").update({ is_admin: isAdminUser }).eq("id", userId);
 
-      // Send welcome message with buttons
       const welcomeText = `👋 Salom, *${firstName}*!\n\n` +
         `🪙 *LunaraPay* — reklama ko'rib pul ishlang!\n\n` +
         `✅ Reklamalarni ko'ring\n` +

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus, Gift, ToggleLeft, ToggleRight, ArrowRightLeft } from "lucide-react";
+import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus, Gift, ToggleLeft, ToggleRight, ArrowRightLeft, List } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,14 @@ const statusConfig = {
   rejected: { label: "Rad etildi", color: "text-destructive", bg: "bg-destructive/10" },
 };
 
+interface BonusWorker {
+  id: string;
+  name: string;
+  username: string;
+  bonus_balance: number;
+  ads_watched: number;
+}
+
 const AdminPage = () => {
   const { user, isAdmin, bonusDayActive, refreshBonusDay } = useUser();
   const [activeTab, setActiveTab] = useState("statistika");
@@ -43,6 +51,8 @@ const AdminPage = () => {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [bonusSearchId, setBonusSearchId] = useState("");
   const [bonusFoundUser, setBonusFoundUser] = useState<DbUser | null>(null);
+  const [bonusWorkers, setBonusWorkers] = useState<BonusWorker[]>([]);
+  const [loadingWorkers, setLoadingWorkers] = useState(false);
   const [stats, setStats] = useState<{
     totalUsers: number;
     pendingRequests: number;
@@ -63,7 +73,6 @@ const AdminPage = () => {
       loadWithdrawRequests();
       loadChannels();
 
-      // Realtime for withdraw requests
       const channel = supabase
         .channel("admin-withdraw-realtime")
         .on("postgres_changes", { event: "*", schema: "public", table: "withdraw_requests" }, () => {
@@ -84,8 +93,6 @@ const AdminPage = () => {
     setLoading(true);
     try {
       const res = await adminAction(user.id, "get_stats");
-      
-      // Get additional real stats from DB
       const today = new Date().toISOString().split("T")[0];
       
       const [balanceRes, withdrawnRes, todayUsersRes, todayAdsRes] = await Promise.all([
@@ -120,6 +127,19 @@ const AdminPage = () => {
   const loadChannels = async () => {
     const data = await fetchChannelTasks();
     setChannels(data);
+  };
+
+  const loadBonusWorkers = async () => {
+    if (!user) return;
+    setLoadingWorkers(true);
+    try {
+      const res = await adminAction(user.id, "get_bonus_day_workers");
+      setBonusWorkers(res.result || []);
+    } catch {
+      toast.error("Xatolik");
+    } finally {
+      setLoadingWorkers(false);
+    }
   };
 
   if (!isAdmin) {
@@ -568,6 +588,44 @@ const AdminPage = () => {
             </button>
           </div>
 
+          {/* Bonus Day Workers List */}
+          <div className="bg-card rounded-lg p-3 card-shadow mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-foreground text-xs flex items-center gap-1">
+                <List size={14} /> Bonus Day ishlovchilar
+              </h3>
+              <button onClick={loadBonusWorkers} disabled={loadingWorkers} className="p-1.5 rounded-lg bg-muted active:scale-95 transition-transform">
+                <RefreshCw size={12} className={`text-muted-foreground ${loadingWorkers ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+            
+            {bonusWorkers.length === 0 && !loadingWorkers && (
+              <p className="text-xs text-muted-foreground text-center py-3">Yuklab olish uchun ⟳ bosing</p>
+            )}
+            {loadingWorkers && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 size={16} className="animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {bonusWorkers.length > 0 && (
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                {bonusWorkers.map((w, i) => (
+                  <div key={w.id} className="bg-muted/50 rounded-lg p-2 flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-muted-foreground w-5">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">{w.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{w.username} · ID: {w.id}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-bold text-accent-foreground">📺 {w.ads_watched}</p>
+                      <p className="text-[10px] text-muted-foreground">🎁 {w.bonus_balance}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Convert bonus to main balance */}
           <div className="bg-card rounded-lg p-3 card-shadow space-y-2">
             <h3 className="font-semibold text-foreground text-xs flex items-center gap-1">
@@ -649,7 +707,6 @@ const AdminPage = () => {
                       await adminAction(user.id, "convert_bonus", { targetUserId: bonusFoundUser.id, amount: amt });
                       toast.success(`✅ ${amt} bonus tanga → asosiy tangaga o'tkazildi!`);
                       setBonusConvertAmount("");
-                      // Refresh user data
                       const res = await adminAction(user.id, "find_user", { targetUserId: bonusFoundUser.id });
                       if (res.result) setBonusFoundUser(res.result);
                     } catch (e: any) {
