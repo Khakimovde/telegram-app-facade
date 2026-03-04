@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
         const updateData: Record<string, unknown> = { status };
         if (reason) updateData.reason = reason;
 
-        // If rejected, return balance
+        // If rejected, return both balances
         if (status === "rejected") {
           const { data: wr } = await supabase
             .from("withdraw_requests")
@@ -59,16 +59,20 @@ Deno.serve(async (req) => {
             .single();
 
           if (wr) {
+            const requiredBonus = Math.floor(wr.tanga / 2);
             const { data: user } = await supabase
               .from("users")
-              .select("balance")
+              .select("balance, bonus_balance")
               .eq("id", wr.user_id)
               .single();
 
             if (user) {
               await supabase
                 .from("users")
-                .update({ balance: user.balance + wr.tanga })
+                .update({ 
+                  balance: user.balance + wr.tanga,
+                  bonus_balance: (user.bonus_balance || 0) + requiredBonus,
+                })
                 .eq("id", wr.user_id);
             }
           }
@@ -123,7 +127,6 @@ Deno.serve(async (req) => {
 
       case "delete_channel": {
         const { channelId } = body;
-        // Delete completions first
         await supabase.from("user_channel_completions").delete().eq("channel_task_id", channelId);
         const { error } = await supabase.from("channel_tasks").delete().eq("id", channelId);
         if (error) throw error;
@@ -195,6 +198,42 @@ Deno.serve(async (req) => {
           .single();
         if (error) throw error;
         result = data;
+        break;
+      }
+
+      case "get_bonus_day_workers": {
+        // Get all users who have bonus ad watches
+        const { data: bonusLogs } = await supabase
+          .from("ad_watch_log")
+          .select("user_id")
+          .eq("type", "bonus");
+
+        if (!bonusLogs || bonusLogs.length === 0) {
+          result = [];
+          break;
+        }
+
+        // Count per user
+        const countMap: Record<string, number> = {};
+        for (const log of bonusLogs) {
+          countMap[log.user_id] = (countMap[log.user_id] || 0) + 1;
+        }
+
+        const userIds = Object.keys(countMap);
+        const { data: users } = await supabase
+          .from("users")
+          .select("id, name, username, bonus_balance")
+          .in("id", userIds);
+
+        const workers = (users || []).map(u => ({
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          bonus_balance: u.bonus_balance || 0,
+          ads_watched: countMap[u.id] || 0,
+        })).sort((a, b) => b.ads_watched - a.ads_watched);
+
+        result = workers;
         break;
       }
 

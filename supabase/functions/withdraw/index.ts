@@ -20,24 +20,46 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Check balance
+    // Check both balances
     const { data: user } = await supabase
       .from("users")
-      .select("balance")
+      .select("balance, bonus_balance")
       .eq("id", userId)
       .single();
 
-    if (!user || user.balance < tanga) {
+    if (!user) {
       return new Response(
-        JSON.stringify({ error: "Balans yetarli emas" }),
+        JSON.stringify({ error: "Foydalanuvchi topilmadi" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Deduct balance
+    // Required bonus_balance = tanga / 2
+    const requiredBonus = Math.floor(tanga / 2);
+
+    if (user.balance < tanga) {
+      return new Response(
+        JSON.stringify({ error: `Asosiy balans yetarli emas! ${tanga.toLocaleString()} tanga kerak.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if ((user.bonus_balance || 0) < requiredBonus) {
+      return new Response(
+        JSON.stringify({ 
+          error: `Bonus tanga yetarli emas! ${tanga.toLocaleString()} tanga yechish uchun ${requiredBonus.toLocaleString()} bonus tanga kerak. Sizda: ${(user.bonus_balance || 0).toLocaleString()} bonus tanga.` 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Deduct both balances
     await supabase
       .from("users")
-      .update({ balance: user.balance - tanga })
+      .update({ 
+        balance: user.balance - tanga,
+        bonus_balance: (user.bonus_balance || 0) - requiredBonus,
+      })
       .eq("id", userId);
 
     // Calculate som (1 tanga = 1.1764 so'm)

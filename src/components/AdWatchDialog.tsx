@@ -17,9 +17,12 @@ interface AdWatchDialogProps {
 const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false }: AdWatchDialogProps) => {
   const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adOpenedAtRef = useRef<number>(0);
 
   const openAdLink = () => {
+    adOpenedAtRef.current = Date.now();
     if (window.Telegram?.WebApp) {
+      // Opens in external browser (Chrome), not in-app
       window.Telegram.WebApp.openLink(AD_URL);
     } else {
       window.open(AD_URL, "_blank");
@@ -30,10 +33,10 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
 
-    // Open ad link
+    // Open ad link in external browser
     openAdLink();
 
-    // Immediately start 7s spinner
+    // Start 7s spinner
     setPhase("spinning");
     timerRef.current = setTimeout(async () => {
       try {
@@ -95,7 +98,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
                 <Loader2 size={18} className="animate-spin" />
                 Hisoblanmoqda...
               </button>
-              <p className="text-xs text-center text-muted-foreground">⏳ Kamida 5 soniya koring</p>
+              <p className="text-xs text-center text-muted-foreground">⏳ Kamida 7 soniya ko'ring</p>
             </div>
           ) : phase === "done" ? (
             <div className="text-center py-4">
