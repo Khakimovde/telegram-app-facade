@@ -320,6 +320,7 @@ const AuksionPage = () => {
         maxAds={999}
         reward="+2 chipta"
         unlimited
+        useAlternatingLinks
       />
     </div>
   );

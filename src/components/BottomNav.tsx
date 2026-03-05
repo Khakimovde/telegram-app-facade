@@ -11,7 +11,7 @@ const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
 
   const tabs = [
     { id: "vazifalar", label: "Vazifalar", icon: ListChecks },
-    ...(bonusDayActive ? [{ id: "bonus", label: "Bonus", icon: Gift }] : []),
+    ...(bonusDayActive ? [{ id: "bonus", label: "Bonus tanga", icon: Gift }] : []),
     { id: "oyin", label: "Reklama", icon: Tv },
     { id: "referal", label: "Referal", icon: Users },
     { id: "top", label: "Top", icon: Trophy },

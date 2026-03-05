@@ -2,7 +2,8 @@ import { useState, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CheckCircle2, Loader2, ExternalLink } from "lucide-react";
 
-const AD_URL = "https://crn77.com/4/10640772";
+const AD_URL_1 = "https://crn77.com/4/10640772";
+const AD_URL_2 = "https://omg10.com/4/10684278";
 
 interface AdWatchDialogProps {
   open: boolean;
@@ -12,20 +13,32 @@ interface AdWatchDialogProps {
   maxAds: number;
   reward: string;
   unlimited?: boolean;
+  useAlternatingLinks?: boolean;
 }
 
-const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false }: AdWatchDialogProps) => {
+// Track which link was last used globally for alternating
+let lastLinkIndex = 0;
+
+const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false, useAlternatingLinks = false }: AdWatchDialogProps) => {
   const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adOpenedAtRef = useRef<number>(0);
 
+  const getAdUrl = () => {
+    if (!useAlternatingLinks) return AD_URL_1;
+    // Alternate between the two links
+    const url = lastLinkIndex === 0 ? AD_URL_1 : AD_URL_2;
+    lastLinkIndex = lastLinkIndex === 0 ? 1 : 0;
+    return url;
+  };
+
   const openAdLink = () => {
     adOpenedAtRef.current = Date.now();
+    const url = getAdUrl();
     if (window.Telegram?.WebApp) {
-      // Opens in external browser (Chrome), not in-app
-      window.Telegram.WebApp.openLink(AD_URL);
+      window.Telegram.WebApp.openLink(url);
     } else {
-      window.open(AD_URL, "_blank");
+      window.open(url, "_blank");
     }
   };
 
@@ -33,10 +46,8 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
 
-    // Open ad link in external browser
     openAdLink();
 
-    // Start 7s spinner
     setPhase("spinning");
     timerRef.current = setTimeout(async () => {
       try {
