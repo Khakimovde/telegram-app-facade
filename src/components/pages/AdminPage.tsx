@@ -351,7 +351,7 @@ const AdminPage = () => {
                 </div>
 
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">Tanga qo'shish / ayirish</p>
+                  <p className="text-[10px] text-muted-foreground mb-1">🪙 Asosiy tanga qo'shish / ayirish</p>
                   <input type="number" value={balanceAmount} onChange={(e) => setBalanceAmount(e.target.value)} placeholder="Miqdor" className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 mb-2" />
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => handleBalance(true)} className="flex items-center justify-center gap-1 py-2 rounded-lg bg-success/10 text-success font-semibold text-xs active:scale-95 transition-transform">
@@ -363,33 +363,41 @@ const AdminPage = () => {
                   </div>
                 </div>
 
-                {/* Bonus → Asosiy o'tkazish */}
-                {(foundUser.bonus_balance || 0) > 0 && (
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-1">🎁 Bonus → Asosiy tangaga o'tkazish</p>
-                    <input type="number" value={bonusConvertAmount} onChange={(e) => setBonusConvertAmount(e.target.value)} placeholder="O'tkazish miqdori" className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 mb-2" />
-                    <button
-                      onClick={async () => {
-                        if (!bonusConvertAmount || !foundUser || !user) return;
-                        const amt = parseInt(bonusConvertAmount);
-                        if (amt <= 0) { toast.error("Miqdor musbat bo'lishi kerak"); return; }
-                        if (amt > (foundUser.bonus_balance || 0)) { toast.error("Bonus tanga yetarli emas!"); return; }
-                        try {
-                          await adminAction(user.id, "convert_bonus", { targetUserId: foundUser.id, amount: amt });
-                          toast.success(`✅ ${amt} bonus tanga → asosiy tangaga o'tkazildi!`);
-                          setBonusConvertAmount("");
-                          const res = await adminAction(user.id, "find_user", { targetUserId: foundUser.id });
-                          if (res.result) setFoundUser(res.result);
-                        } catch (e: any) {
-                          toast.error(e.message || "Xatolik");
-                        }
-                      }}
-                      className="w-full flex items-center justify-center gap-1 gradient-primary text-primary-foreground font-semibold py-2.5 rounded-lg active:scale-[0.98] transition-transform text-sm"
-                    >
-                      <ArrowRightLeft size={14} /> O'tkazish
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">🎁 Bonus tanga qo'shish / ayirish</p>
+                  <input type="number" value={bonusConvertAmount} onChange={(e) => setBonusConvertAmount(e.target.value)} placeholder="Bonus miqdor" className="w-full bg-input rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 mb-2" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={async () => {
+                      if (!bonusConvertAmount || !foundUser || !user) return;
+                      const amt = parseInt(bonusConvertAmount);
+                      if (amt <= 0) { toast.error("Miqdor musbat bo'lishi kerak"); return; }
+                      try {
+                        await adminAction(user.id, "update_bonus_balance", { targetUserId: foundUser.id, amount: amt });
+                        toast.success(`✅ ${foundUser.name} ga +${amt} bonus tanga`);
+                        setBonusConvertAmount("");
+                        const res = await adminAction(user.id, "find_user", { targetUserId: foundUser.id });
+                        if (res.result) setFoundUser(res.result);
+                      } catch { toast.error("Xatolik"); }
+                    }} className="flex items-center justify-center gap-1 py-2 rounded-lg bg-success/10 text-success font-semibold text-xs active:scale-95 transition-transform">
+                      <Plus size={14} /> Qo'shish
+                    </button>
+                    <button onClick={async () => {
+                      if (!bonusConvertAmount || !foundUser || !user) return;
+                      const amt = parseInt(bonusConvertAmount);
+                      if (amt <= 0) { toast.error("Miqdor musbat bo'lishi kerak"); return; }
+                      if (amt > (foundUser.bonus_balance || 0)) { toast.error("Bonus tanga yetarli emas!"); return; }
+                      try {
+                        await adminAction(user.id, "update_bonus_balance", { targetUserId: foundUser.id, amount: -amt });
+                        toast.success(`✅ ${foundUser.name} dan -${amt} bonus tanga`);
+                        setBonusConvertAmount("");
+                        const res = await adminAction(user.id, "find_user", { targetUserId: foundUser.id });
+                        if (res.result) setFoundUser(res.result);
+                      } catch { toast.error("Xatolik"); }
+                    }} className="flex items-center justify-center gap-1 py-2 rounded-lg bg-destructive/10 text-destructive font-semibold text-xs active:scale-95 transition-transform">
+                      <Minus size={14} /> Ayirish
                     </button>
                   </div>
-                )}
+                </div>
               </div>
             );
           })()}

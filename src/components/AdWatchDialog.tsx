@@ -22,22 +22,24 @@ let lastLinkIndex = 0;
 const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false, useAlternatingLinks = false }: AdWatchDialogProps) => {
   const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const adOpenedAtRef = useRef<number>(0);
 
   const getAdUrl = () => {
     if (!useAlternatingLinks) return AD_URL_1;
-    // Alternate between the two links
     const url = lastLinkIndex === 0 ? AD_URL_1 : AD_URL_2;
     lastLinkIndex = lastLinkIndex === 0 ? 1 : 0;
     return url;
   };
 
   const openAdLink = () => {
-    adOpenedAtRef.current = Date.now();
     const url = getAdUrl();
-    if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.openLink(url);
-    } else {
+    // Always open in external browser
+    try {
+      if (window.Telegram?.WebApp?.openLink) {
+        window.Telegram.WebApp.openLink(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch {
       window.open(url, "_blank");
     }
   };
@@ -46,9 +48,13 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
 
+    // Open ad link first
     openAdLink();
 
+    // Start spinning phase - fixed 7 second timer
     setPhase("spinning");
+
+    // Use a simple fixed 7-second timeout - no visibility or focus checks
     timerRef.current = setTimeout(async () => {
       try {
         await onWatch();
