@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
             .single();
 
           if (wr) {
-            const requiredBonus = Math.floor(wr.tanga / 2);
+            const requiredBonus = Math.floor(wr.tanga * 0.3);
             const { data: user } = await supabase
               .from("users")
               .select("balance, bonus_balance")
@@ -193,6 +193,27 @@ Deno.serve(async (req) => {
             bonus_balance: u.bonus_balance - amount,
             balance: u.balance + amount,
           })
+          .eq("id", targetUserId)
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
+        break;
+      }
+
+      case "update_bonus_balance": {
+        const { targetUserId, amount } = body;
+        const { data: u } = await supabase
+          .from("users")
+          .select("bonus_balance")
+          .eq("id", targetUserId)
+          .single();
+        if (!u) throw new Error("User not found");
+        const newBalance = (u.bonus_balance || 0) + amount;
+        if (newBalance < 0) throw new Error("Bonus tanga yetarli emas!");
+        const { data, error } = await supabase
+          .from("users")
+          .update({ bonus_balance: newBalance })
           .eq("id", targetUserId)
           .select()
           .single();

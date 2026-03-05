@@ -36,8 +36,8 @@ const ProfilPage = () => {
     if (!amount || amount < 10000) { toast.error("Minimal 10 000 tanga kiriting!"); return; }
     if (user.balance < amount) { toast.error("Asosiy balans yetarli emas!"); return; }
     
-    // Check bonus balance requirement
-    const requiredBonus = Math.floor(amount / 2);
+    // Check bonus balance requirement (30%)
+    const requiredBonus = Math.floor(amount * 0.3);
     if ((user.bonus_balance || 0) < requiredBonus) {
       toast.error(`Bonus tanga yetarli emas! ${amount.toLocaleString()} tanga yechish uchun ${requiredBonus.toLocaleString()} bonus tanga kerak. Sizda: ${(user.bonus_balance || 0).toLocaleString()} bonus tanga.`);
       return;
@@ -61,7 +61,7 @@ const ProfilPage = () => {
     } finally { setIsProcessing(false); }
   };
 
-  const requiredBonusPreview = tangaAmount ? Math.floor(parseInt(tangaAmount) / 2) : 0;
+  const requiredBonusPreview = tangaAmount ? Math.floor(parseInt(tangaAmount) * 0.3) : 0;
 
   return (
     <div className="py-3 space-y-3">
