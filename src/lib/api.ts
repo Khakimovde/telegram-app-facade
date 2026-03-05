@@ -356,6 +356,21 @@ export async function watchBonusAd(userId: string) {
   return callEdge("watch-ad", { userId, type: "bonus" });
 }
 
+export async function getBonusAdsCount(userId: string): Promise<{ current: number; slotKey: string }> {
+  const now = new Date();
+  const slot = Math.floor(now.getMinutes() / 10);
+  const slotKey = `bonus-${now.toISOString().split("T")[0]}-${now.getHours()}-${slot}`;
+
+  const { count } = await supabase
+    .from("ad_watch_log")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("type", "bonus")
+    .eq("slot_key", slotKey);
+
+  return { current: count || 0, slotKey };
+}
+
 // ---- Team Game Functions ----
 export async function teamGameJoin(userId: string) {
   return callEdge("team-game", { action: "join", userId });

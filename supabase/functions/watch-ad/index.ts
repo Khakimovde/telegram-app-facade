@@ -204,11 +204,32 @@ Deno.serve(async (req) => {
     }
 
     if (type === "bonus") {
-      // Bonus Day: unlimited ads, +2 bonus_balance each
+      // Bonus: 5 ads per 10-min slot, +2 bonus_balance each
+      const h = now.getUTCHours() + 5;
+      const adjustedH = h >= 24 ? h - 24 : h;
+      const slot = Math.floor(now.getMinutes() / 10);
+      const slotKey = `bonus-${now.toISOString().split("T")[0]}-${adjustedH}-${slot}`;
+      const maxAds = 5;
+
+      const { count } = await supabase
+        .from("ad_watch_log")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("type", type)
+        .eq("slot_key", slotKey);
+
+      const currentCount = count || 0;
+      if (currentCount >= maxAds) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Limit tugadi! Keyingi davrani kuting.", current: currentCount, max: maxAds }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       await supabase.from("ad_watch_log").insert({
         user_id: userId,
         type,
-        slot_key: `bonus-${now.toISOString().split("T")[0]}`,
+        slot_key: slotKey,
       });
 
       const { data: bonusUser } = await supabase.from("users").select("bonus_balance, ads_watched_total").eq("id", userId).single();
@@ -220,7 +241,7 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, bonus: 2 }),
+        JSON.stringify({ success: true, bonus: 2, current: currentCount + 1, max: maxAds }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
