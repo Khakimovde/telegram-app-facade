@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Required bonus_balance = tanga * 0.3
-    const requiredBonus = Math.floor(tanga * 0.3);
+    // Required bonus_balance = tanga * 0.13
+    const requiredBonus = Math.floor(tanga * 0.13);
 
     if (user.balance < tanga) {
       return new Response(

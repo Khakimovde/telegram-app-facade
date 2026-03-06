@@ -108,10 +108,10 @@ Deno.serve(async (req) => {
 
       const newCount = currentCount + 1;
 
-      // Only give 70 tanga when 10/10 is complete
+      // Only give 120 tanga when 10/10 is complete
       if (newCount >= maxAds) {
-        earnedAmount = 70;
-        await supabase.rpc("add_balance", { p_user_id: userId, p_amount: 70 });
+        earnedAmount = 120;
+        await supabase.rpc("add_balance", { p_user_id: userId, p_amount: 120 });
       }
 
       // Update ads_watched_total

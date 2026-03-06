@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
             .single();
 
           if (wr) {
-            const requiredBonus = Math.floor(wr.tanga * 0.3);
+            const requiredBonus = Math.floor(wr.tanga * 0.13);
             const { data: user } = await supabase
               .from("users")
               .select("balance, bonus_balance")
