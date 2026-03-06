@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ListChecks, ChevronRight, CheckCircle2, Clock, Tv, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
-import AdWatchDialog from "@/components/AdWatchDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   watchAd,
@@ -13,6 +12,12 @@ import {
   type DbChannelTask,
 } from "@/lib/api";
 
+declare global {
+  interface Window {
+    show_10626599?: () => Promise<void>;
+  }
+}
+
 const VazifalarPage = () => {
   const { user, refreshUser } = useUser();
   const [adDialogOpen, setAdDialogOpen] = useState(false);
@@ -22,6 +27,20 @@ const VazifalarPage = () => {
   const [completedChannels, setCompletedChannels] = useState<string[]>([]);
   const [selectedTask, setSelectedTask] = useState<DbChannelTask | null>(null);
   const [checking, setChecking] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
+  const monetagLoaded = useRef(false);
+
+  // Load Monetag script
+  useEffect(() => {
+    if (monetagLoaded.current) return;
+    monetagLoaded.current = true;
+    const script = document.createElement("script");
+    script.src = "//munqu.com/sdk.js";
+    script.dataset.zone = "10626599";
+    script.dataset.sdk = "show_10626599";
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -61,22 +80,40 @@ const VazifalarPage = () => {
   }, []);
 
   const handleWatchAd = async () => {
-    if (!user) return;
+    if (!user || adsWatched >= 10 || phase !== "idle") return;
+
+    // Show Monetag interstitial
+    setPhase("spinning");
+
+    try {
+      if (typeof window.show_10626599 === "function") {
+        await window.show_10626599();
+      }
+    } catch {
+      // Monetag may fail, continue anyway after 7s
+    }
+
+    // 7 second minimum wait
+    await new Promise(resolve => setTimeout(resolve, 7000));
+
     try {
       const result = await watchAd(user.id, "vazifa");
       if (!result.success) {
         toast.error("Barcha reklamalar ko'rilgan!");
       } else {
         if (result.current >= result.max) {
-          toast.success(`🪙 +70 tanga qo'shildi! (${result.current}/${result.max})`);
+          toast.success(`🪙 +120 tanga qo'shildi! (${result.current}/${result.max})`);
         } else {
           toast.info(`📺 Reklama ko'rildi! (${result.current}/${result.max})`);
         }
         await refreshUser();
       }
       setAdsWatched(result.current);
+      setPhase("done");
+      setTimeout(() => setPhase("idle"), 1200);
     } catch {
       toast.error("Xatolik yuz berdi");
+      setPhase("idle");
     }
   };
 
@@ -132,8 +169,8 @@ const VazifalarPage = () => {
 
       <div className="space-y-2">
         <button
-          onClick={() => setAdDialogOpen(true)}
-          disabled={adsCompleted}
+          onClick={() => !adsCompleted && phase === "idle" && handleWatchAd()}
+          disabled={adsCompleted || phase !== "idle"}
           className="w-full text-left bg-card rounded-2xl p-4 card-3d active:scale-[0.98] transition-transform disabled:opacity-80"
         >
           <div className="flex items-center gap-3">
@@ -145,10 +182,14 @@ const VazifalarPage = () => {
               <p className="text-sm text-muted-foreground">{adsWatched}/10 ta reklama ko'ring</p>
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-sm">🪙</span>
-                <span className="text-sm font-bold text-accent-foreground">70 Tanga (10/10 da)</span>
+                <span className="text-sm font-bold text-accent-foreground">120 Tanga (10/10 da)</span>
               </div>
             </div>
-            {adsCompleted ? (
+            {phase === "spinning" ? (
+              <Loader2 className="text-primary animate-spin shrink-0" size={20} />
+            ) : phase === "done" ? (
+              <CheckCircle2 className="text-success shrink-0" size={20} />
+            ) : adsCompleted ? (
               <div className="flex items-center gap-1 shrink-0">
                 <CheckCircle2 className="text-success" size={18} />
                 <span className="text-sm font-medium text-success">Bajarildi</span>
@@ -256,15 +297,6 @@ const VazifalarPage = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      <AdWatchDialog
-        open={adDialogOpen}
-        onOpenChange={setAdDialogOpen}
-        onWatch={handleWatchAd}
-        adsWatched={adsWatched}
-        maxAds={10}
-        reward="70 Tanga"
-      />
     </div>
   );
 };
