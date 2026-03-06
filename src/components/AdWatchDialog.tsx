@@ -14,12 +14,13 @@ interface AdWatchDialogProps {
   reward: string;
   unlimited?: boolean;
   useAlternatingLinks?: boolean;
+  useRichAdsInterstitial?: boolean;
 }
 
 // Track which link was last used globally for alternating
 let lastLinkIndex = 0;
 
-const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false, useAlternatingLinks = false }: AdWatchDialogProps) => {
+const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward, unlimited = false, useAlternatingLinks = false, useRichAdsInterstitial = false }: AdWatchDialogProps) => {
   const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,7 +33,6 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
 
   const openAdLink = () => {
     const url = getAdUrl();
-    // Always open in external browser
     try {
       if (window.Telegram?.WebApp?.openLink) {
         window.Telegram.WebApp.openLink(url);
@@ -48,13 +48,29 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
     if (!unlimited && adsWatched >= maxAds) return;
     if (phase !== "idle") return;
 
-    // Open ad link first
-    openAdLink();
-
-    // Start spinning phase - fixed 7 second timer
     setPhase("spinning");
 
-    // Use a simple fixed 7-second timeout - no visibility or focus checks
+    // Try RichAds interstitial first if enabled
+    if (useRichAdsInterstitial) {
+      let richAdsShown = false;
+      try {
+        if (window.TelegramAdsController?.triggerInterstitialBanner) {
+          await window.TelegramAdsController.triggerInterstitialBanner();
+          richAdsShown = true;
+        }
+      } catch {
+        // RichAds failed
+      }
+      // Fallback to direct links if RichAds didn't work
+      if (!richAdsShown) {
+        openAdLink();
+      }
+    } else {
+      // Standard direct link
+      openAdLink();
+    }
+
+    // 7 second minimum wait
     timerRef.current = setTimeout(async () => {
       try {
         await onWatch();
@@ -64,7 +80,7 @@ const AdWatchDialog = ({ open, onOpenChange, onWatch, adsWatched, maxAds, reward
         setPhase("idle");
       }
     }, 7000);
-  }, [adsWatched, maxAds, phase, unlimited, onWatch]);
+  }, [adsWatched, maxAds, phase, unlimited, onWatch, useRichAdsInterstitial]);
 
   const completed = !unlimited && adsWatched >= maxAds;
 

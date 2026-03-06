@@ -1,17 +1,30 @@
-import { useState, useEffect, useCallback } from "react";
-import { Gift, Tv, Clock } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Gift, Tv, Clock, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
-import AdWatchDialog from "@/components/AdWatchDialog";
 import { watchBonusAd, getBonusAdsCount } from "@/lib/api";
 
 const MAX_BONUS_ADS = 5;
 
+const AD_URL_1 = "https://crn77.com/4/10640772";
+const AD_URL_2 = "https://omg10.com/4/10684278";
+let lastLinkIndex = 0;
+
+declare global {
+  interface Window {
+    TelegramAdsController?: {
+      triggerInterstitialBanner: (immediate?: boolean) => Promise<string>;
+      initialize: (opts: { pubId: string; appId: string; debug?: boolean }) => void;
+    };
+  }
+}
+
 const BonusDayPage = () => {
   const { user, refreshUser } = useUser();
-  const [adDialogOpen, setAdDialogOpen] = useState(false);
   const [adsWatchedInSlot, setAdsWatchedInSlot] = useState(0);
   const [timeLeft, setTimeLeft] = useState({ minutes: 0, seconds: 0 });
+  const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -33,21 +46,60 @@ const BonusDayPage = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleWatchAd = useCallback(async () => {
-    if (!user || adsWatchedInSlot >= MAX_BONUS_ADS) return;
+  const openFallbackLink = () => {
+    const url = lastLinkIndex === 0 ? AD_URL_1 : AD_URL_2;
+    lastLinkIndex = lastLinkIndex === 0 ? 1 : 0;
     try {
-      const result = await watchBonusAd(user.id);
-      if (result.success) {
-        setAdsWatchedInSlot((p) => p + 1);
-        toast.success("🎁 +2 Bonus tanga qo'shildi!");
-        await refreshUser();
+      if (window.Telegram?.WebApp?.openLink) {
+        window.Telegram.WebApp.openLink(url);
       } else {
-        toast.error(result.error || "Limit tugadi! Keyingi davrani kuting.");
+        window.open(url, "_blank");
       }
     } catch {
-      toast.error("Xatolik yuz berdi");
+      window.open(url, "_blank");
     }
-  }, [user, refreshUser, adsWatchedInSlot]);
+  };
+
+  const handleWatchAd = useCallback(async () => {
+    if (!user || adsWatchedInSlot >= MAX_BONUS_ADS || phase !== "idle") return;
+
+    setPhase("spinning");
+
+    // Try RichAds interstitial video first
+    let richAdsShown = false;
+    try {
+      if (window.TelegramAdsController?.triggerInterstitialBanner) {
+        await window.TelegramAdsController.triggerInterstitialBanner();
+        richAdsShown = true;
+      }
+    } catch {
+      // RichAds failed, will use fallback
+    }
+
+    // If RichAds didn't show, open fallback direct link
+    if (!richAdsShown) {
+      openFallbackLink();
+    }
+
+    // 7 second minimum wait
+    timerRef.current = setTimeout(async () => {
+      try {
+        const result = await watchBonusAd(user.id);
+        if (result.success) {
+          setAdsWatchedInSlot((p) => p + 1);
+          toast.success("🎁 +2 Bonus tanga qo'shildi!");
+          await refreshUser();
+        } else {
+          toast.error(result.error || "Limit tugadi! Keyingi davrani kuting.");
+        }
+        setPhase("done");
+        setTimeout(() => setPhase("idle"), 1200);
+      } catch {
+        toast.error("Xatolik yuz berdi");
+        setPhase("idle");
+      }
+    }, 7000);
+  }, [user, refreshUser, adsWatchedInSlot, phase]);
 
   const limitReached = adsWatchedInSlot >= MAX_BONUS_ADS;
   const fmt = (m: number, s: number) => `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
@@ -104,9 +156,22 @@ const BonusDayPage = () => {
               Keyingi reklamalar: <span className="font-bold text-primary">{fmt(timeLeft.minutes, timeLeft.seconds)}</span>
             </p>
           </div>
+        ) : phase === "spinning" ? (
+          <button
+            disabled
+            className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2 opacity-90"
+          >
+            <Loader2 size={18} className="animate-spin" />
+            Hisoblanmoqda...
+          </button>
+        ) : phase === "done" ? (
+          <div className="flex items-center justify-center gap-2 py-3">
+            <CheckCircle2 className="text-success" size={20} />
+            <span className="text-sm font-semibold text-success">Muvaffaqiyatli!</span>
+          </div>
         ) : (
           <button
-            onClick={() => setAdDialogOpen(true)}
+            onClick={handleWatchAd}
             className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-2xl btn-3d text-sm flex items-center justify-center gap-2"
           >
             <Tv size={18} />
@@ -126,16 +191,6 @@ const BonusDayPage = () => {
           <li>• Ko'proq ishlang va maqsadingizga yeting! 💰</li>
         </ul>
       </div>
-
-      <AdWatchDialog
-        open={adDialogOpen}
-        onOpenChange={setAdDialogOpen}
-        onWatch={handleWatchAd}
-        adsWatched={adsWatchedInSlot}
-        maxAds={MAX_BONUS_ADS}
-        reward="+2 Bonus Tanga"
-        useAlternatingLinks
-      />
     </div>
   );
 };
