@@ -22,6 +22,8 @@ interface SettingsContextType {
   notifications: Notification[];
   unreadCount: number;
   markAllRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearReadNotifications: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
 }
 
@@ -33,6 +35,8 @@ const SettingsContext = createContext<SettingsContextType>({
   notifications: [],
   unreadCount: 0,
   markAllRead: async () => {},
+  deleteNotification: async () => {},
+  clearReadNotifications: async () => {},
   refreshNotifications: async () => {},
 });
 
@@ -65,7 +69,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("app_theme", t);
   }, []);
 
-  // Apply theme class to html element
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") {
@@ -75,7 +78,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme]);
 
-  // Load notifications
   const refreshNotifications = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await supabase
@@ -91,7 +93,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     refreshNotifications();
   }, [refreshNotifications]);
 
-  // Realtime notifications
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
@@ -122,8 +123,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   }, [user?.id, notifications]);
 
+  const deleteNotification = useCallback(async (id: string) => {
+    await supabase.from("notifications").delete().eq("id", id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const clearReadNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    const readIds = notifications.filter(n => n.is_read).map(n => n.id);
+    if (readIds.length === 0) return;
+    await supabase.from("notifications").delete().in("id", readIds);
+    setNotifications(prev => prev.filter(n => !n.is_read));
+  }, [user?.id, notifications]);
+
   return (
-    <SettingsContext.Provider value={{ lang, setLang, theme, setTheme, notifications, unreadCount, markAllRead, refreshNotifications }}>
+    <SettingsContext.Provider value={{ lang, setLang, theme, setTheme, notifications, unreadCount, markAllRead, deleteNotification, clearReadNotifications, refreshNotifications }}>
       {children}
     </SettingsContext.Provider>
   );
