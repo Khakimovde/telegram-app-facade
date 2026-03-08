@@ -5,6 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const PAYMENT_CHANNEL_ID = "-1003730380202";
+const PAYMENT_CHANNEL_USERNAME = "@LunaraPay";
+
 async function verifyAdmin(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
   const adminIds = (Deno.env.get("ADMIN_IDS") || "").split(",").map(s => s.trim());
   if (!adminIds.includes(userId)) return false;
@@ -16,6 +19,36 @@ async function verifyAdmin(supabase: ReturnType<typeof createClient>, userId: st
     .single();
   
   return data?.is_admin === true;
+}
+
+async function sendTelegramMessage(chatId: string, text: string) {
+  const botToken = Deno.env.get("BOT_TOKEN");
+  if (!botToken) return;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+  });
+}
+
+async function getNextPaymentNumber(supabase: ReturnType<typeof createClient>): Promise<number> {
+  const { count } = await supabase
+    .from("withdraw_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "success");
+  return (count || 0) + 1;
+}
+
+function maskCard(card: string): string {
+  const digits = card.replace(/\s/g, "");
+  if (digits.length < 8) return card;
+  return `${digits.slice(0, 4)} **** ${digits.slice(-4)}`;
+}
+
+function formatDate(isoStr: string): string {
+  const d = new Date(isoStr);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 Deno.serve(async (req) => {
@@ -50,31 +83,30 @@ Deno.serve(async (req) => {
         const updateData: Record<string, unknown> = { status };
         if (reason) updateData.reason = reason;
 
+        // Get request details before updating
+        const { data: wr } = await supabase
+          .from("withdraw_requests")
+          .select("user_id, tanga, som, card, created_at")
+          .eq("id", requestId)
+          .single();
+
         // If rejected, return both balances
-        if (status === "rejected") {
-          const { data: wr } = await supabase
-            .from("withdraw_requests")
-            .select("user_id, tanga")
-            .eq("id", requestId)
+        if (status === "rejected" && wr) {
+          const requiredBonus = Math.floor(wr.tanga * 0.13);
+          const { data: user } = await supabase
+            .from("users")
+            .select("balance, bonus_balance")
+            .eq("id", wr.user_id)
             .single();
 
-          if (wr) {
-            const requiredBonus = Math.floor(wr.tanga * 0.13);
-            const { data: user } = await supabase
+          if (user) {
+            await supabase
               .from("users")
-              .select("balance, bonus_balance")
-              .eq("id", wr.user_id)
-              .single();
-
-            if (user) {
-              await supabase
-                .from("users")
-                .update({ 
-                  balance: user.balance + wr.tanga,
-                  bonus_balance: (user.bonus_balance || 0) + requiredBonus,
-                })
-                .eq("id", wr.user_id);
-            }
+              .update({ 
+                balance: user.balance + wr.tanga,
+                bonus_balance: (user.bonus_balance || 0) + requiredBonus,
+              })
+              .eq("id", wr.user_id);
           }
         }
 
@@ -86,7 +118,97 @@ Deno.serve(async (req) => {
           .single();
 
         if (error) throw error;
+
+        // Send notification to user
+        if (wr) {
+          let notifTitle = "";
+          let notifMessage = "";
+          let notifType = "info";
+
+          if (status === "processing") {
+            notifTitle = "⏳ So'rovingiz qabul qilindi";
+            notifMessage = `${wr.tanga.toLocaleString()} tanga → ${wr.som.toLocaleString()} so'm o'tkazish jarayonida.`;
+          } else if (status === "success") {
+            notifTitle = "✅ To'lov amalga oshirildi!";
+            notifMessage = `${wr.tanga.toLocaleString()} tanga → ${wr.som.toLocaleString()} so'm ${maskCard(wr.card)} kartangizga o'tkazildi.`;
+
+            // Get user info for payment channel post
+            const { data: pUser } = await supabase
+              .from("users")
+              .select("name, username")
+              .eq("id", wr.user_id)
+              .single();
+
+            const paymentNum = await getNextPaymentNumber(supabase);
+            const now = new Date();
+            const nowStr = formatDate(now.toISOString());
+            const requestDateStr = formatDate(wr.created_at);
+
+            let channelMsg = `💳 Lunara — navbatdagi to'lov amalga oshirildi #${paymentNum}\n\n`;
+            channelMsg += `👍 Foydalanuvchi: ${pUser?.name || "Noma'lum"}\n`;
+            if (pUser?.username && pUser.username.trim() !== "" && pUser.username !== "@") {
+              channelMsg += `👤 Username: ${pUser.username}\n`;
+            }
+            channelMsg += `📇 Telegram ID: ${wr.user_id}\n`;
+            channelMsg += `💰 Miqdor: ${wr.tanga.toLocaleString()} tanga\n`;
+            channelMsg += `🍀 Pul ekvivalenti: ${wr.som.toLocaleString()} so'm\n`;
+            channelMsg += `📥 Hamyon: ${maskCard(wr.card)}\n`;
+            channelMsg += `⏱ Yechib olish vaqti: ${requestDateStr}\n\n`;
+            channelMsg += `✅ Holat: TO'LANDI\n`;
+            channelMsg += `⏱ To'lov vaqti: ${nowStr}\n\n`;
+            channelMsg += `🛫 Rasmiy kanal: ${PAYMENT_CHANNEL_USERNAME}`;
+
+            await sendTelegramMessage(PAYMENT_CHANNEL_ID, channelMsg);
+          } else if (status === "rejected") {
+            notifTitle = "❌ So'rovingiz rad etildi";
+            notifMessage = `${wr.tanga.toLocaleString()} tanga yechish so'rovi rad etildi.${reason ? ` Sabab: ${reason}` : ""} Balanslaringiz qaytarildi.`;
+            notifType = "warning";
+          }
+
+          if (notifTitle) {
+            await supabase.from("notifications").insert({
+              user_id: wr.user_id,
+              title: notifTitle,
+              message: notifMessage,
+              type: notifType,
+            });
+          }
+        }
+
         result = data;
+        break;
+      }
+
+      case "broadcast_message": {
+        const { title, message } = body;
+        if (!title || !message) throw new Error("title and message required");
+
+        // Get ALL user IDs
+        const { data: allUsers } = await supabase
+          .from("users")
+          .select("id");
+
+        if (!allUsers || allUsers.length === 0) {
+          result = { sent: 0 };
+          break;
+        }
+
+        // Insert notifications in batches
+        const batchSize = 500;
+        let sent = 0;
+        for (let i = 0; i < allUsers.length; i += batchSize) {
+          const batch = allUsers.slice(i, i + batchSize);
+          const notifications = batch.map(u => ({
+            user_id: u.id,
+            title,
+            message,
+            type: "info",
+          }));
+          const { error } = await supabase.from("notifications").insert(notifications);
+          if (!error) sent += batch.length;
+        }
+
+        result = { sent, total: allUsers.length };
         break;
       }
 
@@ -223,7 +345,6 @@ Deno.serve(async (req) => {
       }
 
       case "get_bonus_day_workers": {
-        // Get all users who have bonus ad watches
         const { data: bonusLogs } = await supabase
           .from("ad_watch_log")
           .select("user_id")
@@ -234,7 +355,6 @@ Deno.serve(async (req) => {
           break;
         }
 
-        // Count per user
         const countMap: Record<string, number> = {};
         for (const log of bonusLogs) {
           countMap[log.user_id] = (countMap[log.user_id] || 0) + 1;
