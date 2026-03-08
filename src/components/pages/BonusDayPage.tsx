@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Gift, Tv, Clock, Loader2, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
+import { Gift, Tv, Clock, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 
 const MAX_BONUS_ADS = 5;
 
-const AD_URL_1 = "https://crn77.com/4/10640772";
-const AD_URL_2 = "https://omg10.com/4/10684278";
-const ADSTERRA_URL = "https://www.effectivegatecpm.com/apnsu1mcy?key=b2f0f994a1771e69e07e47c9ab8dc490";
-let lastLinkIndex = 0;
+// 3 fallback links rotating
+const FALLBACK_LINKS = [
+  "https://www.effectivegatecpm.com/apnsu1mcy?key=b2f0f994a1771e69e07e47c9ab8dc490",
+  "https://www.effectivegatecpm.com/exd963f7ka?key=b7fccf168570fddd87a92cd706ba6f64",
+  "https://crn77.com/4/10640772",
+];
+let fallbackIndex = 0;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -53,41 +56,18 @@ declare global {
   }
 }
 
-// Single bonus ad section component
-const BonusAdSection = ({
-  title,
-  icon,
-  adType,
-  reward,
-  gradientClass,
-  progressClass,
-  buttonClass,
-  warningText,
-  userId,
-  onSuccess,
-  openAd,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  adType: string;
-  reward: string;
-  gradientClass: string;
-  progressClass: string;
-  buttonClass: string;
-  warningText?: string;
-  userId: string;
-  onSuccess: () => void;
-  openAd: () => void;
-}) => {
+const BonusDayPage = () => {
+  const { user, refreshUser } = useUser();
   const [adsWatched, setAdsWatched] = useState(0);
   const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
   const [timeLeft, setTimeLeft] = useState({ minutes: 0, seconds: 0 });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadCount = useCallback(async () => {
-    const count = await getSlotCount(userId, adType);
+    if (!user) return;
+    const count = await getSlotCount(user.id, "bonus");
     setAdsWatched(count);
-  }, [userId, adType]);
+  }, [user]);
 
   useEffect(() => { loadCount(); }, [loadCount]);
 
@@ -100,7 +80,6 @@ const BonusAdSection = ({
       const diffSec = (nextSlot - min) * 60 - sec;
       setTimeLeft({ minutes: Math.floor(diffSec / 60), seconds: diffSec % 60 });
 
-      // Auto-refresh when slot changes
       if (min % 10 === 0 && sec < 2) {
         loadCount();
       }
@@ -108,19 +87,46 @@ const BonusAdSection = ({
     return () => clearInterval(interval);
   }, [loadCount]);
 
+  const openFallbackLink = useCallback(() => {
+    const url = FALLBACK_LINKS[fallbackIndex % FALLBACK_LINKS.length];
+    fallbackIndex++;
+    try {
+      if (window.Telegram?.WebApp?.openLink) {
+        window.Telegram.WebApp.openLink(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch {
+      window.open(url, "_blank");
+    }
+  }, []);
+
   const handleWatch = useCallback(async () => {
-    if (adsWatched >= MAX_BONUS_ADS || phase !== "idle") return;
+    if (!user || adsWatched >= MAX_BONUS_ADS || phase !== "idle") return;
 
     setPhase("spinning");
-    openAd();
+
+    // Try RichAds first
+    let richAdsShown = false;
+    try {
+      if (window.TelegramAdsController?.triggerInterstitialBanner) {
+        await window.TelegramAdsController.triggerInterstitialBanner();
+        richAdsShown = true;
+      }
+    } catch {}
+
+    // Fallback to rotating links
+    if (!richAdsShown) {
+      openFallbackLink();
+    }
 
     timerRef.current = setTimeout(async () => {
       try {
-        const result = await callWatchAd(userId, adType);
+        const result = await callWatchAd(user.id, "bonus");
         if (result.success) {
           setAdsWatched((p) => p + 1);
-          toast.success(`🎁 +1 Bonus tanga qo'shildi!`);
-          onSuccess();
+          toast.success(`🎁 +2 Bonus tanga qo'shildi!`);
+          refreshUser();
         } else {
           toast.error(result.error || "Limit tugadi! Keyingi davrani kuting.");
         }
@@ -131,116 +137,10 @@ const BonusAdSection = ({
         setPhase("idle");
       }
     }, 7000);
-  }, [userId, adType, adsWatched, phase, openAd, onSuccess]);
+  }, [user, adsWatched, phase, openFallbackLink, refreshUser]);
 
   const limitReached = adsWatched >= MAX_BONUS_ADS;
   const fmt = (m: number, s: number) => `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-
-  return (
-    <div className="bg-card rounded-2xl p-4 card-3d">
-      {warningText && (
-        <div className="bg-destructive/10 rounded-xl p-2.5 mb-3 flex items-center gap-2">
-          <AlertTriangle size={16} className="text-destructive shrink-0" />
-          <p className="text-[11px] text-destructive font-medium">{warningText}</p>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-          {icon}
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-foreground text-sm">{title}</p>
-          <p className="text-[11px] text-muted-foreground">Har bir reklama = +1 ⭐</p>
-          <p className="text-[10px] text-muted-foreground">Har 10 daqiqada {MAX_BONUS_ADS} ta</p>
-        </div>
-        <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-          <span className="text-lg">🪙</span>
-        </div>
-      </div>
-
-      {/* Progress */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] text-muted-foreground">Jarayon</span>
-        <span className="text-[11px] font-semibold text-foreground">{adsWatched}/{MAX_BONUS_ADS}</span>
-      </div>
-      <div className="w-full bg-muted rounded-full h-2 mb-3">
-        <div
-          className={`${progressClass} h-2 rounded-full transition-all duration-500`}
-          style={{ width: `${(adsWatched / MAX_BONUS_ADS) * 100}%` }}
-        />
-      </div>
-
-      {limitReached ? (
-        <div className="text-center py-2">
-          <Clock className="mx-auto text-muted-foreground mb-1" size={18} />
-          <p className="text-[11px] text-muted-foreground">
-            Keyingi reklamalar: <span className="font-bold text-primary">{fmt(timeLeft.minutes, timeLeft.seconds)}</span>
-          </p>
-        </div>
-      ) : phase === "spinning" ? (
-        <button
-          disabled
-          className={`w-full ${buttonClass} text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 opacity-90`}
-        >
-          <Loader2 size={16} className="animate-spin" />
-          Hisoblanmoqda...
-        </button>
-      ) : phase === "done" ? (
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="text-success" size={18} />
-          <span className="text-sm font-semibold text-success">Muvaffaqiyatli!</span>
-        </div>
-      ) : (
-        <button
-          onClick={handleWatch}
-          className={`w-full ${buttonClass} text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform`}
-        >
-          {reward} &gt;
-        </button>
-      )}
-    </div>
-  );
-};
-
-const BonusDayPage = () => {
-  const { user, refreshUser } = useUser();
-
-  const openRichAd = useCallback(() => {
-    let richAdsShown = false;
-    try {
-      if (window.TelegramAdsController?.triggerInterstitialBanner) {
-        window.TelegramAdsController.triggerInterstitialBanner();
-        richAdsShown = true;
-      }
-    } catch {}
-
-    if (!richAdsShown) {
-      const url = lastLinkIndex === 0 ? AD_URL_1 : AD_URL_2;
-      lastLinkIndex = lastLinkIndex === 0 ? 1 : 0;
-      try {
-        if (window.Telegram?.WebApp?.openLink) {
-          window.Telegram.WebApp.openLink(url);
-        } else {
-          window.open(url, "_blank");
-        }
-      } catch {
-        window.open(url, "_blank");
-      }
-    }
-  }, []);
-
-  const openAdsterraAd = useCallback(() => {
-    try {
-      if (window.Telegram?.WebApp?.openLink) {
-        window.Telegram.WebApp.openLink(ADSTERRA_URL);
-      } else {
-        window.open(ADSTERRA_URL, "_blank");
-      }
-    } catch {
-      window.open(ADSTERRA_URL, "_blank");
-    }
-  }, []);
 
   if (!user) return null;
 
@@ -276,34 +176,63 @@ const BonusDayPage = () => {
         </p>
       </div>
 
-      {/* Section 1: RichAds / Direct links */}
-      <BonusAdSection
-        title="Reklama ko'rish"
-        icon={<Tv size={24} className="text-primary" />}
-        adType="bonus"
-        reward="Reklama ko'rish (+1 bonus)"
-        gradientClass="gradient-primary"
-        progressClass="gradient-primary"
-        buttonClass="bg-primary"
-        userId={user.id}
-        onSuccess={refreshUser}
-        openAd={openRichAd}
-      />
+      {/* Single ad section */}
+      <div className="bg-card rounded-2xl p-4 card-3d">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+            <Tv size={24} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-foreground text-sm">Reklama ko'rish</p>
+            <p className="text-[11px] text-muted-foreground">Har bir reklama = +2 ⭐</p>
+            <p className="text-[10px] text-muted-foreground">Har 10 daqiqada {MAX_BONUS_ADS} ta</p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+            <span className="text-lg">🪙</span>
+          </div>
+        </div>
 
-      {/* Section 2: Adsterra */}
-      <BonusAdSection
-        title="Qo'shimcha bonus"
-        icon={<Gift size={24} className="text-destructive" />}
-        adType="bonus_adsterra"
-        reward="Ko'rish +1 ⭐"
-        gradientClass="bg-gradient-to-r from-orange-500 to-red-500"
-        progressClass="bg-gradient-to-r from-orange-500 to-red-500"
-        buttonClass="bg-gradient-to-r from-orange-500 to-red-500"
-        warningText="18+ Kattalar uchun reklama chiqishi mumkin. Majburiy emas!"
-        userId={user.id}
-        onSuccess={refreshUser}
-        openAd={openAdsterraAd}
-      />
+        {/* Progress */}
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-muted-foreground">Jarayon</span>
+          <span className="text-[11px] font-semibold text-foreground">{adsWatched}/{MAX_BONUS_ADS}</span>
+        </div>
+        <div className="w-full bg-muted rounded-full h-2 mb-3">
+          <div
+            className="gradient-primary h-2 rounded-full transition-all duration-500"
+            style={{ width: `${(adsWatched / MAX_BONUS_ADS) * 100}%` }}
+          />
+        </div>
+
+        {limitReached ? (
+          <div className="text-center py-2">
+            <Clock className="mx-auto text-muted-foreground mb-1" size={18} />
+            <p className="text-[11px] text-muted-foreground">
+              Keyingi reklamalar: <span className="font-bold text-primary">{fmt(timeLeft.minutes, timeLeft.seconds)}</span>
+            </p>
+          </div>
+        ) : phase === "spinning" ? (
+          <button
+            disabled
+            className="w-full bg-primary text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 opacity-90"
+          >
+            <Loader2 size={16} className="animate-spin" />
+            Hisoblanmoqda...
+          </button>
+        ) : phase === "done" ? (
+          <div className="flex items-center justify-center gap-2 py-2">
+            <CheckCircle2 className="text-success" size={18} />
+            <span className="text-sm font-semibold text-success">Muvaffaqiyatli!</span>
+          </div>
+        ) : (
+          <button
+            onClick={handleWatch}
+            className="w-full bg-primary text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          >
+            Reklama ko'rish (+2 bonus) &gt;
+          </button>
+        )}
+      </div>
 
       {/* Info */}
       <div className="text-center space-y-1 py-2">

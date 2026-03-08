@@ -238,9 +238,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Bonus ads: both "bonus" (RichAds) and "bonus_adsterra" share same structure
-    // 5 ads per 10-min slot, +1 bonus_balance each
-    if (type === "bonus" || type === "bonus_adsterra") {
+    // Bonus ads: 5 ads per 10-min slot, +2 bonus_balance each
+    if (type === "bonus") {
       const h = now.getUTCHours() + 5;
       const adjustedH = h >= 24 ? h - 24 : h;
       const slot = Math.floor(now.getMinutes() / 10);
@@ -271,7 +270,7 @@ Deno.serve(async (req) => {
       const { data: bonusUser } = await supabase.from("users").select("bonus_balance, ads_watched_total").eq("id", userId).single();
       if (bonusUser) {
         await supabase.from("users").update({
-          bonus_balance: (bonusUser.bonus_balance || 0) + 1,
+          bonus_balance: (bonusUser.bonus_balance || 0) + 2,
           ads_watched_total: bonusUser.ads_watched_total + 1,
         }).eq("id", userId);
       }
@@ -279,7 +278,7 @@ Deno.serve(async (req) => {
       await checkAdSpeed(supabase, userId);
 
       return new Response(
-        JSON.stringify({ success: true, bonus: 1, current: currentCount + 1, max: maxAds }),
+        JSON.stringify({ success: true, bonus: 2, current: currentCount + 1, max: maxAds }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
