@@ -88,7 +88,7 @@ async function checkAdSpeed(supabase: ReturnType<typeof createClient>, userId: s
       await supabase.from("notifications").insert({
         user_id: userId,
         title: "⚠️ AI nazorati",
-        message: "Siz kamida 7 soniya reklama ko'rmayotgan ko'rinasiz. AI nazoratga olib tekshiryapti. To'liq reklama ko'rishingiz shart!",
+        message: "Siz kamida 7 soniya reklama ko'rmayotgan ko'rinasiz. AI nazoratga olib tekshiryapti. Kamida 7 soniya ko'ring, aks holda AI avtomatik to'lovni rad etadi!",
         type: "warning",
       });
     }
@@ -156,7 +156,6 @@ Deno.serve(async (req) => {
         await addReferralEarnings(supabase, userId, earnedAmount);
       }
 
-      // AI speed check
       await checkAdSpeed(supabase, userId);
 
       return new Response(
@@ -206,7 +205,6 @@ Deno.serve(async (req) => {
         await addReferralEarnings(supabase, userId, earnedAmount);
       }
 
-      // AI speed check
       await checkAdSpeed(supabase, userId);
 
       return new Response(
@@ -232,7 +230,6 @@ Deno.serve(async (req) => {
         await supabase.from("users").update({ ads_watched_total: adUser.ads_watched_total + 1 }).eq("id", userId);
       }
 
-      // AI speed check
       await checkAdSpeed(supabase, userId);
 
       return new Response(
@@ -241,11 +238,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (type === "bonus") {
+    // Bonus ads: both "bonus" (RichAds) and "bonus_adsterra" share same structure
+    // 5 ads per 10-min slot, +1 bonus_balance each
+    if (type === "bonus" || type === "bonus_adsterra") {
       const h = now.getUTCHours() + 5;
       const adjustedH = h >= 24 ? h - 24 : h;
       const slot = Math.floor(now.getMinutes() / 10);
-      const slotKey = `bonus-${now.toISOString().split("T")[0]}-${adjustedH}-${slot}`;
+      const slotKey = `${type}-${now.toISOString().split("T")[0]}-${adjustedH}-${slot}`;
       const maxAds = 5;
 
       const { count } = await supabase
@@ -272,16 +271,15 @@ Deno.serve(async (req) => {
       const { data: bonusUser } = await supabase.from("users").select("bonus_balance, ads_watched_total").eq("id", userId).single();
       if (bonusUser) {
         await supabase.from("users").update({
-          bonus_balance: (bonusUser.bonus_balance || 0) + 2,
+          bonus_balance: (bonusUser.bonus_balance || 0) + 1,
           ads_watched_total: bonusUser.ads_watched_total + 1,
         }).eq("id", userId);
       }
 
-      // AI speed check
       await checkAdSpeed(supabase, userId);
 
       return new Response(
-        JSON.stringify({ success: true, bonus: 2, current: currentCount + 1, max: maxAds }),
+        JSON.stringify({ success: true, bonus: 1, current: currentCount + 1, max: maxAds }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
