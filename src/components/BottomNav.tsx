@@ -1,5 +1,7 @@
 import { ListChecks, Gift, Trophy, Users, Tv, User, Settings } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
+import { useSettings } from "@/contexts/SettingsContext";
+import { t } from "@/lib/i18n";
 
 interface BottomNavProps {
   activeTab: string;
@@ -8,15 +10,16 @@ interface BottomNavProps {
 
 const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
   const { isAdmin, bonusDayActive } = useUser();
+  const { lang } = useSettings();
 
   const tabs = [
-    { id: "vazifalar", label: "Vazifalar", icon: ListChecks },
-    ...(bonusDayActive ? [{ id: "bonus", label: "Bonus tanga", icon: Gift }] : []),
-    { id: "oyin", label: "Reklama", icon: Tv },
-    { id: "referal", label: "Referal", icon: Users },
-    { id: "top", label: "Top", icon: Trophy },
-    { id: "profil", label: "Profil", icon: User },
-    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: Settings }] : []),
+    { id: "vazifalar", label: t("nav.tasks", lang), icon: ListChecks },
+    ...(bonusDayActive ? [{ id: "bonus", label: t("nav.bonus", lang), icon: Gift }] : []),
+    { id: "oyin", label: t("nav.ads", lang), icon: Tv },
+    { id: "referal", label: t("nav.referral", lang), icon: Users },
+    { id: "top", label: t("nav.top", lang), icon: Trophy },
+    { id: "profil", label: t("nav.profile", lang), icon: User },
+    ...(isAdmin ? [{ id: "admin", label: t("nav.admin", lang), icon: Settings }] : []),
   ];
 
   return (

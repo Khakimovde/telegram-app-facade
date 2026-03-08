@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useUser } from "@/contexts/UserContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { getTelegramUser } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
+import NotificationsPanel from "@/components/NotificationsPanel";
 import VazifalarPage from "@/components/pages/VazifalarPage";
 import TeamGamePage from "@/components/pages/TeamGamePage";
 import BonusDayPage from "@/components/pages/BonusDayPage";
@@ -18,24 +21,25 @@ const Index = () => {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminPasswordError, setAdminPasswordError] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const { user, loading, error, isAdmin } = useUser();
+  const { lang } = useSettings();
   const isTelegram = !!getTelegramUser();
 
-  // Block non-Telegram access
   if (!isTelegram) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center max-w-md mx-auto px-4">
         <div className="text-center">
           <p className="text-5xl mb-4">📱</p>
-          <p className="text-lg font-bold text-foreground mb-2">Faqat Telegram orqali ishlaydi</p>
-          <p className="text-sm text-muted-foreground mb-4">Bu ilova faqat Telegram WebApp ichida ishlaydi.</p>
+          <p className="text-lg font-bold text-foreground mb-2">{t("general.telegramOnly", lang)}</p>
+          <p className="text-sm text-muted-foreground mb-4">{t("general.telegramOnlyDesc", lang)}</p>
           <a
             href="https://t.me/LunaraPay_bot"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-semibold"
           >
-            🚀 Telegram orqali ochish
+            {t("general.openTelegram", lang)}
           </a>
         </div>
       </div>
@@ -47,7 +51,7 @@ const Index = () => {
       <div className="min-h-screen bg-background flex items-center justify-center max-w-md mx-auto">
         <div className="text-center">
           <div className="w-12 h-12 mx-auto mb-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
+          <p className="text-sm text-muted-foreground">{t("general.loading", lang)}</p>
         </div>
       </div>
     );
@@ -58,20 +62,20 @@ const Index = () => {
       <div className="min-h-screen bg-background flex items-center justify-center max-w-md mx-auto px-4">
         <div className="text-center">
           <p className="text-2xl mb-2">⚠️</p>
-          <p className="text-sm text-destructive font-medium mb-1">Xatolik</p>
-          <p className="text-xs text-muted-foreground">{error || "Foydalanuvchi topilmadi"}</p>
+          <p className="text-sm text-destructive font-medium mb-1">{t("general.error", lang)}</p>
+          <p className="text-xs text-muted-foreground">{error || t("general.userNotFound", lang)}</p>
         </div>
       </div>
     );
   }
 
-  // Admin password gate
   const handleAdminTab = (tab: string) => {
     if (tab === "admin" && !adminUnlocked) {
       setActiveTab("admin-login");
       return;
     }
     setActiveTab(tab);
+    setShowNotifications(false);
   };
 
   const handleAdminLogin = () => {
@@ -85,6 +89,9 @@ const Index = () => {
   };
 
   const renderPage = () => {
+    if (showNotifications) {
+      return <NotificationsPanel onClose={() => setShowNotifications(false)} />;
+    }
     if (activeTab === "admin-login") {
       return (
         <div className="py-8 px-2">
@@ -98,7 +105,7 @@ const Index = () => {
               onChange={(e) => { setAdminPasswordInput(e.target.value); setAdminPasswordError(false); }}
               onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
               placeholder="Parol"
-              className={`w-full bg-input rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 ${adminPasswordError ? "ring-2 ring-destructive" : ""}`}
+              className={`w-full bg-input rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 text-foreground ${adminPasswordError ? "ring-2 ring-destructive" : ""}`}
             />
             {adminPasswordError && <p className="text-xs text-destructive">Noto'g'ri parol!</p>}
             <button
@@ -125,7 +132,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto">
-      <Header />
+      <Header onNotificationsClick={() => setShowNotifications(!showNotifications)} />
       <main className="flex-1 overflow-y-auto pb-20 px-4">
         {renderPage()}
       </main>
