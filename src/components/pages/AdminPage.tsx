@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus, Gift, ToggleLeft, ToggleRight, ArrowRightLeft, List } from "lucide-react";
+import { Settings, BarChart3, Users, FileText, Hash, Search, RefreshCw, CheckCircle2, XCircle, Loader2, Plus, Minus, Gift, ToggleLeft, ToggleRight, ArrowRightLeft, List, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,7 @@ const adminTabs = [
   { id: "sorovlar", label: "So'rovlar", icon: FileText },
   { id: "kanal", label: "Kanal", icon: Hash },
   { id: "bonus", label: "Bonus", icon: Gift },
+  { id: "xabar", label: "Xabar", icon: MessageSquare },
 ];
 
 const statusConfig = {
@@ -53,6 +54,9 @@ const AdminPage = () => {
   const [bonusFoundUser, setBonusFoundUser] = useState<DbUser | null>(null);
   const [bonusWorkers, setBonusWorkers] = useState<BonusWorker[]>([]);
   const [loadingWorkers, setLoadingWorkers] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastSending, setBroadcastSending] = useState(false);
   const [stats, setStats] = useState<{
     totalUsers: number;
     pendingRequests: number;
@@ -217,6 +221,27 @@ const AdminPage = () => {
     }
   };
 
+  const sendBroadcast = async () => {
+    if (!broadcastTitle.trim() || !broadcastMessage.trim() || !user) {
+      toast.error("Sarlavha va xabarni to'ldiring!");
+      return;
+    }
+    setBroadcastSending(true);
+    try {
+      const res = await adminAction(user.id, "broadcast_message", {
+        title: broadcastTitle.trim(),
+        message: broadcastMessage.trim(),
+      });
+      toast.success(`✅ ${res.result?.sent || 0} ta foydalanuvchiga xabar yuborildi!`);
+      setBroadcastTitle("");
+      setBroadcastMessage("");
+    } catch {
+      toast.error("Xatolik");
+    } finally {
+      setBroadcastSending(false);
+    }
+  };
+
   const pendingCount = withdrawRequests.filter(r => r.status === "pending" || r.status === "processing").length;
 
   const statItems = stats ? [
@@ -342,7 +367,6 @@ const AdminPage = () => {
                   ))}
                 </div>
 
-                {/* Bonus balance display */}
                 <div className="bg-muted/50 rounded-lg p-2 flex items-center justify-between">
                   <div>
                     <p className="text-[10px] text-muted-foreground">Bonus tanga</p>
@@ -573,7 +597,6 @@ const AdminPage = () => {
         <div>
           <h2 className="font-semibold text-foreground text-sm mb-3">🎁 Bonus Day boshqaruvi</h2>
 
-          {/* Toggle */}
           <div className="bg-card rounded-lg p-3 card-shadow mb-3 flex items-center justify-between">
             <div>
               <p className="font-semibold text-foreground text-sm">Bonus Day</p>
@@ -596,7 +619,6 @@ const AdminPage = () => {
             </button>
           </div>
 
-          {/* Bonus Day Workers List */}
           <div className="bg-card rounded-lg p-3 card-shadow mb-3">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-foreground text-xs flex items-center gap-1">
@@ -634,7 +656,6 @@ const AdminPage = () => {
             )}
           </div>
 
-          {/* Convert bonus to main balance */}
           <div className="bg-card rounded-lg p-3 card-shadow space-y-2">
             <h3 className="font-semibold text-foreground text-xs flex items-center gap-1">
               <ArrowRightLeft size={14} /> Bonus → Asosiy tangaga o'tkazish
@@ -727,6 +748,63 @@ const AdminPage = () => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "xabar" && (
+        <div>
+          <h2 className="font-semibold text-foreground text-sm mb-3">📨 Xabar yuborish</h2>
+          <div className="bg-card rounded-lg p-3 card-shadow space-y-3">
+            <p className="text-[11px] text-muted-foreground">
+              Barcha foydalanuvchilarga bildirishnoma yuborish. Xabar har bir foydalanuvchining bildirishnomalar paneliga keladi.
+            </p>
+            <div>
+              <label className="text-[10px] text-muted-foreground mb-1 block">Sarlavha</label>
+              <input
+                type="text"
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                placeholder="Masalan: 🎉 Yangilik!"
+                className="w-full bg-input rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground mb-1 block">Xabar matni</label>
+              <textarea
+                value={broadcastMessage}
+                onChange={(e) => setBroadcastMessage(e.target.value)}
+                placeholder="Xabar matnini kiriting..."
+                className="w-full bg-input rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                rows={4}
+              />
+            </div>
+
+            {broadcastTitle.trim() && broadcastMessage.trim() && (
+              <div className="bg-muted/50 rounded-lg p-3">
+                <p className="text-[10px] text-muted-foreground mb-1">Ko'rinishi:</p>
+                <div className="bg-card rounded-lg p-2.5 card-shadow">
+                  <p className="text-xs font-semibold text-foreground">{broadcastTitle}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{broadcastMessage}</p>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={sendBroadcast}
+              disabled={broadcastSending || !broadcastTitle.trim() || !broadcastMessage.trim()}
+              className="w-full flex items-center justify-center gap-2 gradient-primary text-primary-foreground font-semibold py-2.5 rounded-lg active:scale-[0.98] transition-transform text-sm disabled:opacity-50"
+            >
+              {broadcastSending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Yuborilmoqda...
+                </>
+              ) : (
+                <>
+                  <Send size={14} /> Barchaga yuborish
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
