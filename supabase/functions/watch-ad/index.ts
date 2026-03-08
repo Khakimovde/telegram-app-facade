@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
     if (type === "bonus") {
       const h = now.getUTCHours() + 5;
       const adjustedH = h >= 24 ? h - 24 : h;
-      const slot = Math.floor(now.getMinutes() / 10);
+      const slot = Math.floor(now.getUTCMinutes() / 10);
       const slotKey = `${type}-${now.toISOString().split("T")[0]}-${adjustedH}-${slot}`;
       const maxAds = 5;
 
