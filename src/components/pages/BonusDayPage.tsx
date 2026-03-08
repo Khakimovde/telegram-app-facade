@@ -32,9 +32,10 @@ async function callWatchAd(userId: string, type: string) {
 
 async function getSlotCount(userId: string, type: string): Promise<number> {
   const now = new Date();
-  const h = now.getHours() + (5 - Math.floor(now.getTimezoneOffset() / 60));
-  const adjustedH = h >= 24 ? h - 24 : (h < 0 ? h + 24 : h);
-  const slot = Math.floor(now.getMinutes() / 10);
+  const utcH = now.getUTCHours();
+  const h = utcH + 5;
+  const adjustedH = h >= 24 ? h - 24 : h;
+  const slot = Math.floor(now.getUTCMinutes() / 10);
   const slotKey = `${type}-${now.toISOString().split("T")[0]}-${adjustedH}-${slot}`;
 
   const { count } = await supabase
