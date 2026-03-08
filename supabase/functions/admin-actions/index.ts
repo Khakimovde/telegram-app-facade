@@ -345,10 +345,11 @@ Deno.serve(async (req) => {
       }
 
       case "get_bonus_day_workers": {
+        // Include both bonus and bonus_adsterra
         const { data: bonusLogs } = await supabase
           .from("ad_watch_log")
-          .select("user_id")
-          .eq("type", "bonus");
+          .select("user_id, type")
+          .in("type", ["bonus", "bonus_adsterra"]);
 
         if (!bonusLogs || bonusLogs.length === 0) {
           result = [];
