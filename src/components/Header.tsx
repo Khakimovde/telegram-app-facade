@@ -1,8 +1,15 @@
+import { Bell } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { getTelegramUser } from "@/lib/api";
 
-const Header = () => {
+interface HeaderProps {
+  onNotificationsClick?: () => void;
+}
+
+const Header = ({ onNotificationsClick }: HeaderProps) => {
   const { user, loading } = useUser();
+  const { unreadCount } = useSettings();
   const tgUser = getTelegramUser()?.user;
   const photoUrl = tgUser?.photo_url;
 
@@ -39,7 +46,19 @@ const Header = () => {
         </div>
       </div>
       <div className="flex items-center gap-1.5">
-        {/* Bonus balance - always visible */}
+        {/* Notification bell */}
+        <button
+          onClick={onNotificationsClick}
+          className="relative w-9 h-9 rounded-2xl bg-muted/50 flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <Bell size={18} className="text-muted-foreground" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+        {/* Bonus balance */}
         <div className="flex items-center gap-1 bg-accent/20 text-accent-foreground rounded-2xl px-2.5 py-1.5">
           <span className="text-sm">🎁</span>
           <span className="font-bold text-xs">{(user.bonus_balance || 0).toLocaleString()}</span>
